@@ -145,7 +145,11 @@ void updateAI()
 void updateInput()
 {
     SGP_PollInput();
-    
+    if (SGP_ButtonPressed(JOY_1, BUTTON_START))
+    {
+        drawPauseMenu();
+    }
+
     if (SGP_ButtonPressed(JOY_1, BUTTON_C))
     {
         switch (aiMode)

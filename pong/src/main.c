@@ -7,11 +7,6 @@
 
 SGP sgp;
 
-typedef enum {
-    START,
-    GAME
-} GameState;
-
 // Variable definitions (these are the actual variables, not extern declarations)
 Ball ball;
 Paddle player1, player2;
@@ -35,22 +30,6 @@ GameState gameState = START;
 
 void initGame()
 {
-
-    VDP_init();
-    SPR_init();
-    SGP_init();
-
-    PAL_setPalette(PAL0, palette, DMA);
-    VDP_setTextPalette(PAL0);
-    VDP_clearPlane(BG_A, TRUE);
-
-    PAL_setPalette(PAL1, ball_8.palette->data, DMA);
-    ball_sm = SPR_addSprite(&ball_8, ball.x, ball.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
-    paddle_sprite = SPR_addSprite(&paddle, player1.x, player1.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
-    paddle_sprite2 = SPR_addSprite(&paddle, player2.x, player2.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
-
-    SPR_setVisibility(ball_sm, VISIBLE);
-
     ball.x = SCREEN_WIDTH / 2;
     ball.y = SCREEN_HEIGHT / 2;
     ball.oldX = ball.x;
@@ -70,10 +49,32 @@ void initGame()
 
     score1 = 0;
     score2 = 0;
+    oldScore1 = 99;  // Force score redraw
+    oldScore2 = 99;  // Force score redraw
+    lastAiMode = AI_MODE_PREDICTIVE; // Force AI mode text redraw
+
+    SPR_setVisibility(paddle_sprite, VISIBLE);
+    SPR_setVisibility(paddle_sprite2, VISIBLE);
+    SPR_setVisibility(ball_sm, VISIBLE);
 }
 
 void main(_Bool reset)
 {
+    VDP_init();
+    SPR_init();
+    SGP_init();
+
+    PAL_setPalette(PAL0, palette, DMA);
+    VDP_setTextPalette(PAL0);
+    VDP_clearPlane(BG_A, TRUE);
+
+    PAL_setPalette(PAL1, ball_8.palette->data, DMA);
+    ball_sm = SPR_addSprite(&ball_8, ball.x, ball.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
+    paddle_sprite = SPR_addSprite(&paddle, player1.x, player1.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
+    paddle_sprite2 = SPR_addSprite(&paddle, player2.x, player2.y, TILE_ATTR(PAL1, FALSE, FALSE, FALSE));
+
+    SPR_setVisibility(ball_sm, VISIBLE);
+
     initGame();
 
     while (1)
@@ -102,6 +103,13 @@ void main(_Bool reset)
             drawScore();
             SPR_update();
 
+            break;
+        case RESTART:
+            animateDoorClosing();
+            animateDoorOpening();
+            drawBorder();
+            initGame();
+            gameState = START;
             break;
         }
 

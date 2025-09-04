@@ -32,6 +32,12 @@ typedef enum
     AI_ACTION_MOVE_DOWN
 } AIAction;
 
+typedef enum {
+    START,
+    GAME,
+    RESTART
+} GameState;
+
 // External variables that draw functions need access to
 extern Ball ball;
 extern Paddle player1, player2;
