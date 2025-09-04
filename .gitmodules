@@ -1,0 +1,3 @@
+[submodule "pong/inc/sega-genesis-pal"]
+	path = pong/inc/sega-genesis-pal
+	url = https://github.com/savaughn/sega-genesis-pal.git
