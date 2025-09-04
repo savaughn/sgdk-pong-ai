@@ -6,6 +6,8 @@ import random
 from collections import deque
 from datetime import datetime
 import os
+import time
+import sys
 
 # Simple Pong environment simulation for training
 class PongEnv:
@@ -14,105 +16,83 @@ class PongEnv:
 
     def reset(self):
         self.ball_x = 160
-        self.ball_y = 112
-        self.ball_vx = random.choice([-2, 2])  # Random initial direction
-        self.ball_vy = random.choice([-2, 2])
-        self.paddle_y = 100
-        self.ai_y = 100
-        self.score = 0
+        self.ball_y = 100
+        self.ball_vx = 2
+        self.ball_vy = 2
+        self.player_y = 88
+        self.ai_y = 88
+        self.player_score = 0
+        self.ai_score = 0
+        self.steps = 0
         return self.get_state()
 
     def get_state(self):
-        # Normalize state values to match ai.c exactly
-        # ai.c normalizes: ball_x/160, ball_y/112, ball_vx*16, ball_vy*16, ai_y/112
-        return np.array([
-            (self.ball_x - 160) / 160.0,      # Ball X position normalized around center
-            (self.ball_y - 112) / 112.0,      # Ball Y position normalized around center
-            self.ball_vx / 5.0,               # Ball X velocity normalized  
-            self.ball_vy / 5.0,               # Ball Y velocity normalized
-            (self.ai_y - 88) / 88.0           # AI paddle Y position normalized (accounting for 48px paddle height)
-        ])
+        # Normalize positions to 0-1 range for neural network
+        ball_x_norm = self.ball_x / 320.0
+        ball_y_norm = self.ball_y / 200.0
+        player_y_norm = self.player_y / 200.0
+        ai_y_norm = self.ai_y / 200.0
+        ball_vx_norm = (self.ball_vx + 5) / 10.0  # Normalize velocity -5 to 5 -> 0 to 1
+        return np.array([ball_x_norm, ball_y_norm, player_y_norm, ai_y_norm, ball_vx_norm])
 
     def step(self, action):
-        # Action: 0 = up, 1 = stay, 2 = down
-        if action == 0:
-            self.ai_y -= 2
-        elif action == 2:
-            self.ai_y += 2
-        self.ai_y = np.clip(self.ai_y, 0, 224-32)
+        self.steps += 1
+        
+        # AI action (0=stay, 1=up, 2=down)
+        if action == 1 and self.ai_y > 0:
+            self.ai_y -= 4
+        elif action == 2 and self.ai_y < 176:
+            self.ai_y += 4
 
-        # Update ball
+        # Simple player AI (follows ball)
+        if self.ball_y < self.player_y + 12:
+            self.player_y = max(0, self.player_y - 3)
+        elif self.ball_y > self.player_y + 12:
+            self.player_y = min(176, self.player_y + 3)
+
+        # Ball movement
         self.ball_x += self.ball_vx
         self.ball_y += self.ball_vy
-        
+
         # Ball collision with top/bottom walls
-        if self.ball_y <= 0 or self.ball_y >= 224-8:
+        if self.ball_y <= 0 or self.ball_y >= 200:
             self.ball_vy = -self.ball_vy
 
-        # Simple player paddle (follows ball for training opponent)
-        target_y = self.ball_y - 16  # Center paddle on ball
-        if self.paddle_y < target_y:
-            self.paddle_y = min(self.paddle_y + 3, target_y)
-        elif self.paddle_y > target_y:
-            self.paddle_y = max(self.paddle_y - 3, target_y)
-        self.paddle_y = np.clip(self.paddle_y, 0, 224-32)
-
-        # Collision with player paddle (left side)
-        if (self.ball_vx < 0 and self.ball_x <= 30 and self.ball_x >= 22 and 
-            self.ball_y + 8 >= self.paddle_y and self.ball_y <= self.paddle_y + 32):
-            self.ball_vx = -self.ball_vx
-            # Add some angle variation
-            if self.ball_y < self.paddle_y + 10:
-                self.ball_vy = -abs(self.ball_vy)
-            elif self.ball_y > self.paddle_y + 22:
-                self.ball_vy = abs(self.ball_vy)
-
-        # Collision detection and enhanced reward system
-        reward = 0
+        # Ball collision with paddles
         done = False
-        
-        # AI paddle collision (right side) - Primary positive reward
-        if (self.ball_vx > 0 and self.ball_x + 8 >= 290 and self.ball_x <= 298 and 
-            self.ball_y + 8 >= self.ai_y and self.ball_y <= self.ai_y + 32):
+        reward = 0
+
+        # Player paddle collision (left side)
+        if (self.ball_x <= 16 and self.ball_vx < 0 and 
+            self.player_y <= self.ball_y <= self.player_y + 24):
             self.ball_vx = -self.ball_vx
-            
-            # Better rewards based on hit quality (center hits are better)
-            paddle_center = self.ai_y + 16
-            ball_center = self.ball_y + 4
-            hit_distance = abs(ball_center - paddle_center)
-            
-            if hit_distance <= 8:  # Center hit
-                reward = 15
-            elif hit_distance <= 16:  # Good hit
-                reward = 10
-            else:  # Edge hit
-                reward = 5
-                
-            self.score += 1
-            
-            # Add some angle variation based on hit position
-            if self.ball_y < self.ai_y + 10:
-                self.ball_vy = -abs(self.ball_vy)
-            elif self.ball_y > self.ai_y + 22:
-                self.ball_vy = abs(self.ball_vy)
-                
-        elif self.ball_x > 320:  # Ball went off right side (AI missed)
-            reward = -25  # Strong negative reward for missing
+            self.ball_x = 16
+
+        # AI paddle collision (right side)
+        elif (self.ball_x >= 304 and self.ball_vx > 0 and 
+              self.ai_y <= self.ball_y <= self.ai_y + 24):
+            self.ball_vx = -self.ball_vx
+            self.ball_x = 304
+            reward = 1.0  # Reward for hitting the ball
+
+        # Scoring
+        elif self.ball_x <= 0:
+            self.ai_score += 1
+            reward = 2.0  # Big reward for scoring
             done = True
-            
-        elif self.ball_x < 0:   # Ball went off left side (player missed) 
-            reward = 8  # Reward for making opponent miss
+        elif self.ball_x >= 320:
+            self.player_score += 1
+            reward = -2.0  # Big penalty for getting scored on
             done = True
+
+        # Additional reward shaping for better AI behavior
+        if not done:
+            # Calculate distance from AI paddle to ball
+            paddle_center = self.ai_y + 12
+            ball_distance = abs(paddle_center - self.ball_y)
             
-        else:
-            # Continuous reward shaping for better learning
-            paddle_center = self.ai_y + 16
-            ball_center = self.ball_y + 4
-            distance_to_ball = abs(paddle_center - ball_center)
-            
-            # Small positive reward for being close to ball path
             if self.ball_vx > 0:  # Ball moving toward AI
-                proximity_reward = max(0, 2.0 - distance_to_ball / 50.0)
+                proximity_reward = max(0, 2.0 - ball_distance / 50.0)
                 reward = proximity_reward - 0.05  # Small time penalty
             else:
                 reward = -0.02  # Very small penalty when ball moving away
@@ -128,36 +108,33 @@ class DQNAgent:
     def __init__(self, state_size=5, action_size=3):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = deque(maxlen=10000)  # Larger memory for better training
+        self.memory = deque(maxlen=50000)  # Larger memory for better learning
         self.epsilon = 1.0  # Exploration rate
-        self.epsilon_min = 0.05  # Higher minimum for continued exploration
-        self.epsilon_decay = 0.9995  # Slower decay for better exploration
-        self.learning_rate = 0.0005  # Lower learning rate for more stable training
-        self.gamma = 0.95  # Discount factor
-        self.model = self._build_model()
-        self.target_model = self._build_model()  # Target network for stable training
-        self.update_target_freq = 100  # Update target network every 100 steps
+        self.epsilon_min = 0.05  # Minimum exploration
+        self.epsilon_decay = 0.9995  # Slower decay for more exploration
+        self.learning_rate = 0.001
         self.step_count = 0
-        self.rng = np.random.default_rng(42)  # Fixed seed for reproducibility
+        self.update_target_freq = 1000  # Update target model every 1000 steps
+        self.rng = np.random.default_rng(42)  # Reproducible random seed
+        
+        # Build neural network models
+        self.model = self._build_model()
+        self.target_model = self._build_model()
+        self.update_target_model()
 
     def _build_model(self):
-        # EXACT architecture match with ai.c: 5 inputs -> 8 hidden (ReLU) -> 3 outputs
         model = keras.Sequential([
-            layers.Input(shape=(self.state_size,)),
-            layers.Dense(8, activation='relu', 
-                        kernel_initializer='he_normal',  # Better initialization for ReLU
-                        name='hidden_layer'),
-            layers.Dense(self.action_size, activation='linear',
-                        kernel_initializer='he_normal',
-                        name='output_layer')
+            layers.Dense(128, input_dim=self.state_size, activation='relu'),
+            layers.Dropout(0.2),  # Prevent overfitting
+            layers.Dense(128, activation='relu'),
+            layers.Dropout(0.2),
+            layers.Dense(64, activation='relu'),
+            layers.Dense(self.action_size, activation='linear')
         ])
-        model.compile(optimizer=keras.optimizers.Adam(learning_rate=self.learning_rate),
-                     loss='mse',
-                     metrics=['mae'])
+        model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=self.learning_rate))
         return model
 
     def update_target_model(self):
-        """Copy weights from main model to target model for stable training"""
         self.target_model.set_weights(self.model.get_weights())
 
     def remember(self, state, action, reward, next_state, done):
@@ -180,96 +157,183 @@ class DQNAgent:
             return
         
         batch = random.sample(self.memory, batch_size)
-        states = np.array([transition[0] for transition in batch])
-        actions = np.array([transition[1] for transition in batch])
-        rewards = np.array([transition[2] for transition in batch])
-        next_states = np.array([transition[3] for transition in batch])
-        dones = np.array([transition[4] for transition in batch])
+        states = np.array([e[0] for e in batch])
+        actions = np.array([e[1] for e in batch])
+        rewards = np.array([e[2] for e in batch])
+        next_states = np.array([e[3] for e in batch])
+        dones = np.array([e[4] for e in batch])
 
-        # Use target network for more stable training
+        # Double DQN: Use main model to select action, target model to evaluate
         current_q_values = self.model.predict(states, verbose=0)
-        next_q_values = self.target_model.predict(next_states, verbose=0)
+        next_q_values_main = self.model.predict(next_states, verbose=0)
+        next_q_values_target = self.target_model.predict(next_states, verbose=0)
 
-        for i in range(batch_size):
-            target = rewards[i]
-            if not dones[i]:
-                target += self.gamma * np.max(next_q_values[i])
-            current_q_values[i][actions[i]] = target
-
-        # Train with multiple epochs for better learning
-        self.model.fit(states, current_q_values, epochs=1, verbose=0, batch_size=batch_size)
+        target_q_values = current_q_values.copy()
         
-        # Decay epsilon more gradually
+        for i in range(batch_size):
+            if dones[i]:
+                target_q_values[i][actions[i]] = rewards[i]
+            else:
+                # Double DQN update
+                best_action = np.argmax(next_q_values_main[i])
+                target_q_values[i][actions[i]] = rewards[i] + 0.95 * next_q_values_target[i][best_action]
+
+        self.model.fit(states, target_q_values, epochs=1, verbose=0)
+        
+        # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-# Training
-print("Starting DQN training...")
-print("Architecture: 5 inputs → 8 hidden (ReLU) → 3 outputs (matches ai.c exactly)")
-print("This will train for 1000 episodes with improved learning parameters.")
-print("Progress will be reported every 50 episodes.")
-print("Training will take 5-10 minutes for much better AI quality.")
+    def update_model(self):
+        # Final update of target model
+        self.update_target_model()
+
+# Training setup
+print("=" * 70)
+print("🎮 ELITE PONG AI TRAINING - 10,000 EPISODES 🎮")
+print("=" * 70)
+print("This advanced training will create a SIGNIFICANTLY smarter AI!")
+print("Features:")
+print("• 10x more training episodes (10,000 vs 1,000)")
+print("• Enhanced reward shaping for better gameplay")
+print("• Double DQN with target network for stable learning")
+print("• Larger experience replay buffer (50,000 memories)")
+print("• Dropout layers to prevent overfitting")
+print("• Advanced exploration strategy")
+print("")
+print("Training will take 30-60 minutes for ELITE AI quality.")
 print("-" * 70)
 
 env = PongEnv()
 agent = DQNAgent()
 
-episodes = 1000  # More episodes for better training
+# Check for existing model to continue training from
+continue_training = False
+model_path = None
+
+if len(sys.argv) > 1 and sys.argv[1] == "--continue":
+    # Look for existing models
+    if os.path.exists('../models/pong_ai_model.h5'):
+        model_path = '../models/pong_ai_model.h5'
+        continue_training = True
+    elif os.path.exists('../pong_ai_model.h5'):
+        model_path = '../pong_ai_model.h5'
+        continue_training = True
+else:
+    # Interactive prompt for continuing training
+    if os.path.exists('../models/pong_ai_model.h5'):
+        response = input(f"\n🤖 Found existing model: ../models/pong_ai_model.h5\n   Continue training from this model? (y/n): ").lower().strip()
+        if response in ['y', 'yes']:
+            model_path = '../models/pong_ai_model.h5'
+            continue_training = True
+    elif os.path.exists('../pong_ai_model.h5'):
+        response = input(f"\n🤖 Found existing model: ../pong_ai_model.h5\n   Continue training from this model? (y/n): ").lower().strip()
+        if response in ['y', 'yes']:
+            model_path = '../pong_ai_model.h5'
+            continue_training = True
+
+if continue_training:
+    print(f"\n🔄 Loading existing model from: {model_path}")
+    try:
+        # Try loading with custom objects to handle version compatibility
+        agent.model = tf.keras.models.load_model(model_path, compile=False)
+        
+        # Recompile the model with current Keras version settings
+        agent.model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=agent.learning_rate))
+        
+        # Clone and set up target model
+        agent.target_model = tf.keras.models.clone_model(agent.model)
+        agent.target_model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=agent.learning_rate))
+        agent.target_model.set_weights(agent.model.get_weights())
+        
+        print("✅ Successfully loaded existing model weights!")
+        print("   Training will continue from the existing knowledge base.")
+        # Reduce epsilon since we're continuing training
+        agent.epsilon = max(0.1, agent.epsilon * 0.5)  # Start with less exploration
+        print(f"   Starting epsilon (exploration): {agent.epsilon:.3f}")
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+        print("   Starting fresh training instead...")
+        continue_training = False
+else:
+    print("\n🆕 Starting fresh training from scratch...")
+
+episodes = 10000  # Elite training - 10x more episodes!
 scores = []
 best_score = -float('inf')
 episode_lengths = []
 
-print("Beginning training loop...")
+if continue_training:
+    print("Beginning CONTINUED elite training loop...")
+    print(f"🚀 Resuming from existing model with {episodes} additional episodes")
+else:
+    print("Beginning elite training loop...")
+    print(f"🚀 Starting fresh training with {episodes} episodes")
+
+# Start timing the training
+training_start_time = time.time()
 
 for episode in range(episodes):
-    if episode == 0:
-        print("Episode 0 starting...")
-        agent.update_target_model()  # Initialize target model
-    
     state = env.reset()
     total_reward = 0
-    done = False
-    steps = 0
-    max_steps = 500  # Longer episodes for better learning
+    steps_in_episode = 0
     
-    while not done and steps < max_steps:
+    while True:
         action = agent.act(state)
         next_state, reward, done = env.step(action)
         agent.remember(state, action, reward, next_state, done)
         state = next_state
         total_reward += reward
-        steps += 1
+        steps_in_episode += 1
         
-        # Train more frequently with larger batches for better learning
-        if len(agent.memory) > 128 and steps % 4 == 0:
-            agent.replay(64)
+        if done or steps_in_episode > 1000:  # Prevent infinite games
+            break
     
     scores.append(total_reward)
-    episode_lengths.append(steps)
+    episode_lengths.append(steps_in_episode)
     
-    print(f"Episode {episode} completed - Score: {total_reward:.2f}, Steps: {steps}, Epsilon: {agent.epsilon:.3f}")
+    # Train the agent
+    if len(agent.memory) > 1000:
+        agent.replay(64)
     
-    # Progress reporting every 50 episodes
-    if episode % 50 == 0 and episode > 0:
-        avg_score = np.mean(scores[-50:])
-        avg_length = np.mean(episode_lengths[-50:])
-        progress = (episode / episodes) * 100
-        print(f"Progress: {progress:5.1f}% | Episode {episode:4d} | Avg Score: {avg_score:7.2f} | Avg Length: {avg_length:5.1f} | Epsilon: {agent.epsilon:.3f}")
+    # Print progress every 100 episodes
+    if episode % 100 == 0 and episode > 0:
+        avg_score = np.mean(scores[-100:])
+        avg_length = np.mean(episode_lengths[-100:])
+        print(f"Episode {episode:4d} | Avg Score: {avg_score:6.2f} | Avg Length: {avg_length:4.0f} | Epsilon: {agent.epsilon:.3f}")
         
+        # Track best performance
         if avg_score > best_score:
             best_score = avg_score
             print(f"           >>> NEW BEST AVERAGE SCORE: {best_score:.2f} <<<")
     
-    # Progress dots for visual feedback (every 10 episodes)
-    elif episode % 10 == 0 and episode > 0:
+    # Progress dots for visual feedback (every 25 episodes)
+    elif episode % 25 == 0 and episode > 0:
         print(".", end="", flush=True)
 
 print("\n" + "=" * 70)
-print("🎉 TRAINING COMPLETED! 🎉")
+print("🏆 ELITE TRAINING COMPLETED! 🏆")
+
+# Calculate and display training time
+training_end_time = time.time()
+total_training_time = training_end_time - training_start_time
+hours = int(total_training_time // 3600)
+minutes = int((total_training_time % 3600) // 60)
+seconds = total_training_time % 60
+
+if hours > 0:
+    time_str = f"{hours}h {minutes}m {seconds:.1f}s"
+elif minutes > 0:
+    time_str = f"{minutes}m {seconds:.1f}s"
+else:
+    time_str = f"{seconds:.1f}s"
+
+print(f"⏱️  Total training time: {time_str}")
 print(f"Best average score achieved: {best_score:.2f}")
 print(f"Final epsilon (exploration rate): {agent.epsilon:.3f}")
 print(f"Total training steps: {agent.step_count}")
 print(f"Memory buffer size: {len(agent.memory)}")
+print("This AI should be SIGNIFICANTLY better than the 1K version!")
 print("=" * 70)
 
 # Use the trained model

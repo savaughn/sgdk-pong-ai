@@ -10,8 +10,8 @@ const ROMHeader rom_header = {
     "SEGA MEGA DRIVE ",
 #endif
     "(C)SGDK 2024    ",
-    "Pong with AI                                    ",
-    "Pong with AI                                    ",
+    "Pong with PongNET                               ",
+    "Pong with PongNET                               ",
     "GM 00000000-00",
     0x000,
     "JD              ",
