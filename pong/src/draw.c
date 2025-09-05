@@ -1,7 +1,10 @@
 #include "draw.h"
 #include "sgp/sgp.h"
+#include "audio.h"
 
 extern GameState gameState;
+const u16 screenWidthTiles = 40;
+const u16 screenHeightTiles = 28;
 
 void drawPaddle(Paddle *paddle, Sprite *sprite)
 {
@@ -10,7 +13,7 @@ void drawPaddle(Paddle *paddle, Sprite *sprite)
 
 void drawBall(void)
 {
-    SPR_setPosition(ball_sm, ball.x, ball.y);
+    SPR_setPosition(ball_sprite, ball.x, ball.y);
 }
 
 void drawPauseMenu(void)
@@ -19,11 +22,11 @@ void drawPauseMenu(void)
     VDP_clearTileMapRect(BG_A, 10, 10, 22, 8);
     SPR_setVisibility(paddle_sprite, HIDDEN);
     SPR_setVisibility(paddle_sprite2, HIDDEN);
-    SPR_setVisibility(ball_sm, HIDDEN);
+    SPR_setVisibility(ball_sprite, HIDDEN);
 
-    VDP_drawText("PAUSED", 15, 10);
+    VDP_drawText("PAUSED", 17, 10);
 
-    VDP_drawText("press B to quit", 10, 14);
+    VDP_drawText("press B to quit", 13, 14);
 
     // Now wait for a new START press to resume
     while (1)
@@ -36,7 +39,7 @@ void drawPauseMenu(void)
             VDP_clearTileMapRect(BG_A, 10, 10, 21, 8);
             SPR_setVisibility(paddle_sprite, VISIBLE);
             SPR_setVisibility(paddle_sprite2, VISIBLE);
-            SPR_setVisibility(ball_sm, VISIBLE);
+            SPR_setVisibility(ball_sprite, VISIBLE);
 
             break;
         }
@@ -50,6 +53,46 @@ void drawPauseMenu(void)
 
         SYS_doVBlankProcess();
     }
+}
+
+void drawPlayBorder(void)
+{
+    u32 bottomBorderTile[8] = {
+        0x11111111,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000};
+    
+    u32 topBorderTile[8] = {
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x00000000,
+        0x11111111};
+
+    // Load the border tiles
+    VDP_loadTileData(topBorderTile, TILE_USER_INDEX + 2, 1, DMA);
+    VDP_loadTileData(bottomBorderTile, TILE_USER_INDEX + 3, 1, DMA);
+
+    // Draw top border (1px thick)
+    for (u16 x = 0; x < screenWidthTiles; x++)
+    {
+        VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, TILE_USER_INDEX + 2), x, 1);
+    }
+
+    // Draw bottom border (1px thick)
+    for (u16 x = 0; x < screenWidthTiles; x++)
+    {
+        VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, TILE_USER_INDEX + 3), x, screenHeightTiles - 2);
+    }
+
 }
 
 void drawBorder(void)
@@ -79,10 +122,6 @@ void drawBorder(void)
     VDP_loadTileData(leftBorderTile, TILE_USER_INDEX, 1, DMA);
     VDP_loadTileData(rightBorderTile, TILE_USER_INDEX + 1, 1, DMA);
 
-    // Screen dimensions in tiles: 40x28 (320x224 pixels / 8)
-    u16 screenWidthTiles = 40;
-    u16 screenHeightTiles = 28;
-
     // Draw left border (1px thick)
     for (u16 y = 0; y < screenHeightTiles; y++)
     {
@@ -98,13 +137,15 @@ void drawBorder(void)
 
 void animateDoorOpening(void)
 {
+    AUDIO_play(WAV_OPEN);
+
     u16 screenWidthTiles = 40;
     u16 screenHeightTiles = 28;
     u16 centerX = screenWidthTiles / 2;
 
     // Use the existing 1px border tiles (already loaded)
-    u16 leftBorderTile = TILE_USER_INDEX;      // Left 1px border tile
-    u16 rightBorderTile = TILE_USER_INDEX + 1; // Right 1px border tile
+    u16 leftBorderTile = TILE_USER_INDEX + 1;  // Right 1px border tile (for left door)
+    u16 rightBorderTile = TILE_USER_INDEX;     // Left 1px border tile (for right door)
 
     // Start with doors closed in the center, then open them to edges
     for (u16 pos = centerX - 1; pos < screenWidthTiles; pos++)
@@ -161,17 +202,20 @@ void animateDoorOpening(void)
         VDP_setTileMapXY(BG_A, 0, 0, y);                    // Clear left border
         VDP_setTileMapXY(BG_A, 0, screenWidthTiles - 1, y); // Clear right border
     }
+
+    AUDIO_stop();
 }
 
 void animateDoorClosing(void)
 {
+    AUDIO_play(WAV_CLOSE);
     u16 screenWidthTiles = 40;
     u16 screenHeightTiles = 28;
     u16 centerX = screenWidthTiles / 2;
 
     // Use the existing 1px border tiles (already loaded)
-    u16 leftBorderTile = TILE_USER_INDEX;      // Left 1px border tile
-    u16 rightBorderTile = TILE_USER_INDEX + 1; // Right 1px border tile
+    u16 leftBorderTile = TILE_USER_INDEX;      // Solid on right side (inside for closing left door)
+    u16 rightBorderTile = TILE_USER_INDEX + 1; // Solid on left side (inside for closing right door)
 
     // Animate doors closing from edges to center
     for (u16 pos = 0; pos <= centerX; pos++)
@@ -209,6 +253,7 @@ void animateDoorClosing(void)
     {
         SYS_doVBlankProcess();
     }
+    AUDIO_stop();
 }
 
 void drawStartScreen(void)
@@ -219,10 +264,11 @@ void drawStartScreen(void)
     {
         VDP_clearPlane(BG_A, TRUE);
         drawBorder();
+
         borderDrawn = true;
     }
 
-    VDP_drawText("PONG with PongNet", 11, 5);
+    VDP_drawText("PONG with PongNet", 12, 5);
     VDP_drawText("press start", 14, 15);
     VDP_drawText("@github/savaughn", 20, 25);
     VDP_drawText("Made with SGDK & SGP", 18, 26);
@@ -232,15 +278,15 @@ void drawScore(void)
 {
     if (score1 != oldScore1 || score2 != oldScore2)
     {
-        VDP_clearTileMapRect(BG_A, 0, 1, 40, 1);
+        VDP_clearTileMapRect(BG_A, 0, 0, 40, 1);
 
         char player1_score_text[5];
         intToStr(score1, player1_score_text, 1);
-        VDP_drawText(player1_score_text, 5, 2);
+        VDP_drawText(player1_score_text, 5, 0);
 
         char player2_score_text[5];
         intToStr(score2, player2_score_text, 1);
-        VDP_drawText(player2_score_text, 32, 2);
+        VDP_drawText(player2_score_text, 32, 0);
 
         oldScore1 = score1;
         oldScore2 = score2;

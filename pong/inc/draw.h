@@ -8,6 +8,7 @@ typedef struct
 {
     s16 x, y;
     s16 oldX, oldY;
+    s16 velY;  // Paddle velocity for ball trajectory modification
 } Paddle;
 
 typedef struct
@@ -34,6 +35,7 @@ typedef enum
 
 typedef enum {
     START,
+    COUNTDOWN,
     GAME,
     RESTART
 } GameState;
@@ -44,7 +46,7 @@ extern Paddle player1, player2;
 extern u16 score1, score2;
 extern u16 oldScore1, oldScore2;
 extern AIMode aiMode, lastAiMode;
-extern Sprite *ball_sm;
+extern Sprite *ball_sprite;
 extern Sprite *paddle_sprite, *paddle_sprite2;
 extern const u16 palette[16];
 
@@ -55,6 +57,7 @@ void drawPauseMenu(void);
 void drawBorder(void);
 void drawStartScreen(void);
 void drawScore(void);
+void drawPlayBorder(void);
 
 // Animation function declarations
 void animateDoorOpening(void);

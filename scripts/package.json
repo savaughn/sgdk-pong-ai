@@ -1,0 +1,22 @@
+{
+  "name": "sgdk-pong-ai-tools",
+  "version": "1.0.0",
+  "description": "Tools for visualizing and analyzing SGDK Pong AI lookup tables",
+  "main": "visualize_lut.js",
+  "scripts": {
+    "visualize": "node visualize_lut.js"
+  },
+  "dependencies": {
+    "sharp": "^0.32.0"
+  },
+  "keywords": [
+    "sgdk",
+    "pong",
+    "ai",
+    "visualization",
+    "genesis",
+    "neural-network"
+  ],
+  "author": "SGDK Pong AI Project",
+  "license": "MIT"
+}

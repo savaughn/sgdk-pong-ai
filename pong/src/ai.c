@@ -1,13 +1,17 @@
 #include <genesis.h>
 #include "ai.h"
+#include "resources.h"
+
+#if !USE_BINARY_LUT
 #include "ai_lut_generated.h"
+#endif
 
 #define INPUT_SIZE 5
 #define HIDDEN_SIZE 8
 #define OUTPUT_SIZE 3
 
 // Set to 1 to use debug weights, 0 to use real trained weights
-#define USE_DEBUG_WEIGHTS 1
+#define USE_DEBUG_WEIGHTS 0
 
 // DEBUG WEIGHTS
 const s16 debug_weights1[INPUT_SIZE][HIDDEN_SIZE] = {
@@ -96,8 +100,8 @@ s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 a
         s32 sum = bias1[h];
         for (u8 i = 0; i < INPUT_SIZE; i++)
         {
-            // Avoid /1000 division - use approximation: /1000 ≈ *33/32768 (33/32768 = 0.00101)
-            sum += ((s32)inputs[i] * weights1[i][h] * 33) >> 15; // /1000 approximation
+            // Use 1024 scale factor for easy bit shifting: >>10 is divide by 1024
+            sum += ((s32)inputs[i] * weights1[i][h]) >> 10;
         }
 #endif
         hidden[h] = relu((s16)sum);
@@ -116,8 +120,8 @@ s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 a
         s32 sum = bias2[o];
         for (u8 h = 0; h < HIDDEN_SIZE; h++)
         {
-            // Same /1000 approximation
-            sum += ((s32)hidden[h] * weights2[h][o] * 33) >> 15;
+            // Use 1024 scale factor for easy bit shifting: >>10 is divide by 1024
+            sum += ((s32)hidden[h] * weights2[h][o]) >> 10;
         }
 #endif
         outputs[o] = (s16)sum;
@@ -176,35 +180,44 @@ s16 pong_ai_predict(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fi
 
 // Precomputed lookup table approach for Genesis optimization
 // This creates a quantized decision table instead of full neural network inference
-#define LUT_BALL_X_STEPS 20 // 320/16 = 20 steps
-#define LUT_BALL_Y_STEPS 14 // 224/16 = 14 steps
-#define LUT_VEL_STEPS 5     // -2, -1, 0, 1, 2
-#define LUT_AI_Y_STEPS 14   // 224/16 = 14 steps
+#define LUT_BALL_X_STEPS 40 // 320/8 = 40 steps (8px resolution)
+#define LUT_BALL_Y_STEPS 28 // 224/8 = 28 steps (8px resolution)
+#define LUT_VEL_X_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
+#define LUT_VEL_Y_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
+#define LUT_AI_Y_STEPS 28   // 224/8 = 28 steps (8px resolution)
 
 // Fast lookup function - O(1) instead of O(neural network)
 s16 pong_ai_lookup(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
 {
-    // Quantize inputs to lookup table indices
-    u16 bx_idx = F32_toInt(ball_x) >> 4; // Divide by 16 using bit shift
-    u16 by_idx = F32_toInt(ball_y) >> 4; // Divide by 16 using bit shift
-    u16 vx_idx = F32_toInt(ball_vx) + 2; // Map -2..2 to 0..4
-    u16 vy_idx = F32_toInt(ball_vy) + 2; // Map -2..2 to 0..4
-    u16 ay_idx = F32_toInt(ai_y) >> 4;   // Divide by 16 using bit shift
+    // Quantize inputs to lookup table indices (8px resolution)
+    u16 bx_idx = F32_toInt(ball_x) >> 3; // Divide by 8 using bit shift
+    u16 by_idx = F32_toInt(ball_y) >> 3; // Divide by 8 using bit shift
+    u16 vx_idx = F32_toInt(ball_vx) + 4; // Map -4..4 to 0..8
+    u16 vy_idx = F32_toInt(ball_vy) + 4; // Map -4..4 to 0..8
+    u16 ay_idx = F32_toInt(ai_y) >> 3;   // Divide by 8 using bit shift
 
     // Clamp to valid ranges
     if (bx_idx >= LUT_BALL_X_STEPS)
         bx_idx = LUT_BALL_X_STEPS - 1;
     if (by_idx >= LUT_BALL_Y_STEPS)
         by_idx = LUT_BALL_Y_STEPS - 1;
-    if (vx_idx >= LUT_VEL_STEPS)
-        vx_idx = LUT_VEL_STEPS - 1;
-    if (vy_idx >= LUT_VEL_STEPS)
-        vy_idx = LUT_VEL_STEPS - 1;
+    if (vx_idx >= LUT_VEL_X_STEPS)
+        vx_idx = LUT_VEL_X_STEPS - 1;
+    if (vy_idx >= LUT_VEL_Y_STEPS)
+        vy_idx = LUT_VEL_Y_STEPS - 1;
     if (ay_idx >= LUT_AI_Y_STEPS)
         ay_idx = LUT_AI_Y_STEPS - 1;
 
     // Calculate lookup table index (5D to 1D mapping)
-    u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_STEPS + vx_idx) * LUT_VEL_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
+    // Must match the order in generate_ai_lut.py: bx, by, vx, vy, ay
+    u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
 
+#if USE_BINARY_LUT
+    // Use binary resource (faster build, smaller memory footprint)
+    const u8* lut_data = (const u8*)ai_lut;
+    return lut_data[index];
+#else
+    // Use header array (legacy)
     return ai_lookup_table[index];
+#endif
 }

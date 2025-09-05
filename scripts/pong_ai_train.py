@@ -9,6 +9,13 @@ import os
 import time
 import sys
 
+# Updated training script to match actual Pong game implementation:
+# - Uses exact same input normalization as ai.c for consistency
+# - Network architecture: 5 inputs -> 8 hidden -> 3 outputs (matches ai.c)
+# - Scale factor: 1024 for easy bit shifting on Genesis (>>10 instead of /1000)
+# - Game boundaries match real implementation with horizontal borders
+# - Paddle positions and collision detection match actual game coordinates
+
 # Simple Pong environment simulation for training
 class PongEnv:
     def __init__(self):
@@ -27,52 +34,71 @@ class PongEnv:
         return self.get_state()
 
     def get_state(self):
-        # Normalize positions to 0-1 range for neural network
-        ball_x_norm = self.ball_x / 320.0
-        ball_y_norm = self.ball_y / 200.0
-        player_y_norm = self.player_y / 200.0
-        ai_y_norm = self.ai_y / 200.0
-        ball_vx_norm = (self.ball_vx + 5) / 10.0  # Normalize velocity -5 to 5 -> 0 to 1
-        return np.array([ball_x_norm, ball_y_norm, player_y_norm, ai_y_norm, ball_vx_norm])
+        # Use the EXACT same input normalization as in ai.c
+        # This ensures training matches the actual game implementation
+        
+        # ai.c uses: inputs[0] = (bx << 1) * 13 >> 6;
+        bx_input = (self.ball_x << 1) * 13 >> 6
+        
+        # ai.c uses: inputs[1] = by * 37 >> 6;
+        by_input = self.ball_y * 37 >> 6
+        
+        # ai.c uses: inputs[2] = F32_toInt(ball_vx) << 4;
+        vx_input = self.ball_vx << 4
+        
+        # ai.c uses: inputs[3] = F32_toInt(ball_vy) << 4;
+        vy_input = self.ball_vy << 4
+        
+        # ai.c uses: inputs[4] = ay * 37 >> 6;
+        ay_input = self.ai_y * 37 >> 6
+        
+        # Normalize to reasonable training range (divide by 1024 to match scale factor)
+        return np.array([
+            bx_input / 1024.0,
+            by_input / 1024.0, 
+            vx_input / 1024.0,
+            vy_input / 1024.0,
+            ay_input / 1024.0
+        ])
 
     def step(self, action):
         self.steps += 1
         
-        # AI action (0=stay, 1=up, 2=down)
+        # AI action (0=stay, 1=up, 2=down) - using real game PADDLE_SPEED=3
         if action == 1 and self.ai_y > 0:
-            self.ai_y -= 4
-        elif action == 2 and self.ai_y < 176:
-            self.ai_y += 4
+            self.ai_y -= 3  # PADDLE_SPEED from real game
+        elif action == 2 and self.ai_y < 174:  # 222 - 48 = 174 (screenHeightTiles-2)*8 - PADDLE_HEIGHT
+            self.ai_y += 3  # PADDLE_SPEED from real game
 
-        # Simple player AI (follows ball)
-        if self.ball_y < self.player_y + 12:
+        # Simple player AI (follows ball) - using real game PADDLE_SPEED=3
+        if self.ball_y < self.player_y + 24:  # Half of PADDLE_HEIGHT (48/2 = 24)
             self.player_y = max(0, self.player_y - 3)
-        elif self.ball_y > self.player_y + 12:
-            self.player_y = min(176, self.player_y + 3)
+        elif self.ball_y > self.player_y + 24:  # Half of PADDLE_HEIGHT (48/2 = 24)
+            self.player_y = min(174, self.player_y + 3)  # 222 - 48 = 174
 
-        # Ball movement
+        # Ball movement - using real game BALL_SPEED=2
         self.ball_x += self.ball_vx
         self.ball_y += self.ball_vy
 
-        # Ball collision with top/bottom walls
-        if self.ball_y <= 0 or self.ball_y >= 200:
+        # Ball collision with top/bottom walls (match real game with horizontal borders at y=16 and y=208)
+        if self.ball_y <= 16 or self.ball_y >= 208:
             self.ball_vy = -self.ball_vy
 
-        # Ball collision with paddles
+        # Ball collision with paddles (using real PADDLE_HEIGHT=48)
         done = False
         reward = 0
 
-        # Player paddle collision (left side)
-        if (self.ball_x <= 16 and self.ball_vx < 0 and 
-            self.player_y <= self.ball_y <= self.player_y + 24):
+        # Player paddle collision (left side, match real game coordinates)
+        if (self.ball_x <= 24 and self.ball_vx < 0 and 
+            self.player_y <= self.ball_y <= self.player_y + 48):  # Real PADDLE_HEIGHT
             self.ball_vx = -self.ball_vx
-            self.ball_x = 16
+            self.ball_x = 24
 
-        # AI paddle collision (right side)
-        elif (self.ball_x >= 304 and self.ball_vx > 0 and 
-              self.ai_y <= self.ball_y <= self.ai_y + 24):
+        # AI paddle collision (right side, match real game coordinates)
+        elif (self.ball_x >= 296 and self.ball_vx > 0 and 
+              self.ai_y <= self.ball_y <= self.ai_y + 48):  # Real PADDLE_HEIGHT
             self.ball_vx = -self.ball_vx
-            self.ball_x = 304
+            self.ball_x = 296
             reward = 1.0  # Reward for hitting the ball
 
         # Scoring
@@ -87,8 +113,8 @@ class PongEnv:
 
         # Additional reward shaping for better AI behavior
         if not done:
-            # Calculate distance from AI paddle to ball
-            paddle_center = self.ai_y + 12
+            # Calculate distance from AI paddle to ball (using real paddle center)
+            paddle_center = self.ai_y + 24  # Half of real PADDLE_HEIGHT (48/2 = 24)
             ball_distance = abs(paddle_center - self.ball_y)
             
             if self.ball_vx > 0:  # Ball moving toward AI
@@ -123,13 +149,10 @@ class DQNAgent:
         self.update_target_model()
 
     def _build_model(self):
+        # Match the exact architecture used in ai.c: 5 inputs -> 8 hidden -> 3 outputs
         model = keras.Sequential([
-            layers.Dense(128, input_dim=self.state_size, activation='relu'),
-            layers.Dropout(0.2),  # Prevent overfitting
-            layers.Dense(128, activation='relu'),
-            layers.Dropout(0.2),
-            layers.Dense(64, activation='relu'),
-            layers.Dense(self.action_size, activation='linear')
+            layers.Dense(8, input_dim=self.state_size, activation='relu'),  # 8 hidden neurons to match ai.c
+            layers.Dense(self.action_size, activation='linear')              # 3 output actions (up, stay, down)
         ])
         model.compile(loss='mse', optimizer=keras.optimizers.Adam(learning_rate=self.learning_rate))
         return model
@@ -190,16 +213,16 @@ class DQNAgent:
 
 # Training setup
 print("=" * 70)
-print("🎮 ELITE PONG AI TRAINING - 10,000 EPISODES 🎮")
+print("🎮 OPTIMIZED PONG AI TRAINING - GENESIS-COMPATIBLE 🎮")
 print("=" * 70)
-print("This advanced training will create a SIGNIFICANTLY smarter AI!")
+print("This training is optimized for Sega Genesis implementation!")
 print("Features:")
-print("• 10x more training episodes (10,000 vs 1,000)")
-print("• Enhanced reward shaping for better gameplay")
+print("• Input normalization matches ai.c implementation exactly")
+print("• Network architecture: 5 inputs -> 8 hidden -> 3 outputs")
+print("• Scale factor: 1024 for efficient bit shifting (>>10)")
+print("• Game boundaries match real implementation with borders")
 print("• Double DQN with target network for stable learning")
-print("• Larger experience replay buffer (50,000 memories)")
-print("• Dropout layers to prevent overfitting")
-print("• Advanced exploration strategy")
+print("• Large experience replay buffer (50,000 memories)")
 print("")
 print("Training will take 30-60 minutes for ELITE AI quality.")
 print("-" * 70)

@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .retro-text {
+    font-family: 'Press Start 2P', monospace;
+    text-shadow: 2px 2px 0px #000;
+  }
+  
+  .glow-text {
+    text-shadow: 0 0 10px currentColor;
+  }
+  
+  .retro-border {
+    border: 2px solid;
+    border-image: linear-gradient(45deg, #00ff41, #0080ff, #ff0080, #00ff41) 1;
+  }
+  
+  .scan-lines {
+    background: linear-gradient(transparent 50%, rgba(0, 255, 65, 0.03) 50%);
+    background-size: 100% 4px;
+  }
+  
+  .crt-flicker {
+    animation: flicker 0.15s infinite linear;
+  }
+  
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.98; }
+  }
+  
+  .matrix-bg {
+    background: radial-gradient(ellipse at center, rgba(0, 255, 65, 0.1) 0%, transparent 70%);
+  }
+}
+
+@layer components {
+  .btn-retro {
+    @apply px-6 py-3 font-bold uppercase tracking-wider border-2 border-retro-green text-retro-green bg-transparent hover:bg-retro-green hover:text-black transition-all duration-200 transform hover:scale-105 active:scale-95;
+  }
+  
+  .btn-ai {
+    @apply px-6 py-3 font-bold uppercase tracking-wider border-2 border-ai-cyan text-ai-cyan bg-transparent hover:bg-ai-cyan hover:text-black transition-all duration-200 transform hover:scale-105 active:scale-95;
+  }
+  
+  .card-retro {
+    @apply bg-gray-800 border-2 border-gray-700 rounded-lg p-6 hover:border-retro-green transition-all duration-300 hover:shadow-lg hover:shadow-retro-green/20;
+  }
+  
+  .input-retro {
+    @apply bg-gray-800 border-2 border-gray-600 rounded px-4 py-2 text-white focus:border-retro-green focus:outline-none transition-colors duration-200;
+  }
+  
+  .progress-bar {
+    @apply w-full bg-gray-700 rounded-full h-3 overflow-hidden;
+  }
+  
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-retro-green to-ai-cyan transition-all duration-500 ease-out;
+  }
+}
