@@ -30,8 +30,9 @@ typedef struct {
 
 typedef enum {
     AI_MODE_NEURAL = 0,
-    AI_MODE_PREDICTIVE = 1,
-    AI_MODE_SIMPLE = 2
+    AI_MODE_LOOKUP = 1,
+    AI_MODE_PREDICTIVE = 2,
+    AI_MODE_SIMPLE = 3
 } AIMode;
 
 // Global game state

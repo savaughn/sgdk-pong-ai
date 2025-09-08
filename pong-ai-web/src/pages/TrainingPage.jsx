@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import * as tf from '@tensorflow/tfjs';
+import { useModel } from '../contexts/ModelContext';
 
 const TrainingPage = () => {
+  const { saveTrainedModel, hasTrainedModel, clearModel } = useModel();
   const [isTraining, setIsTraining] = useState(false);
   const [model, setModel] = useState(null);
   const [trainingData, setTrainingData] = useState(null);
@@ -130,6 +132,17 @@ const TrainingPage = () => {
       ys.dispose();
 
       console.log('Training completed!');
+      
+      // Save the trained model to context for use in game
+      const finalMetrics = metrics[metrics.length - 1];
+      await saveTrainedModel(model, {
+        finalLoss: finalMetrics?.loss || 0,
+        finalAccuracy: finalMetrics?.accuracy || 0,
+        epochs: epochs,
+        trainingTime: Date.now() - startTime,
+        datasetSize: datasetSize
+      });
+      
     } catch (error) {
       console.error('Training failed:', error);
     } finally {
@@ -286,6 +299,21 @@ const TrainingPage = () => {
               {/* Model Management */}
               <div className="border-t border-gray-700 pt-6">
                 <h3 className="text-lg font-bold mb-4">Model Management</h3>
+                
+                {/* Model Status Indicator */}
+                {hasTrainedModel() && (
+                  <div className="mb-4 p-3 bg-green-900/50 border border-green-600 rounded">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="text-green-400 font-medium">
+                        Model Ready for Game!
+                      </span>
+                    </div>
+                    <p className="text-green-300 text-sm mt-1">
+                      Navigate to Game page to test your trained AI
+                    </p>
+                  </div>
+                )}
                 
                 <div className="space-y-3">
                   <button

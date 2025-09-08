@@ -11,21 +11,22 @@
     "build-wasm": "emcc src/wasm/pong.c -o public/pong.js -s WASM=1 -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\"]' -s EXPORTED_FUNCTIONS='[\"_main\",\"_update_game\",\"_get_ball_x\",\"_get_ball_y\",\"_get_player1_y\",\"_get_player2_y\",\"_get_score1\",\"_get_score2\",\"_set_ai_mode\",\"_handle_input\"]' -s MODULARIZE=1 -s EXPORT_NAME='PongModule' -O3"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.15.0",
     "@tensorflow/tfjs": "^4.10.0",
     "@tensorflow/tfjs-vis": "^1.5.1",
-    "chart.js": "^4.4.0",
-    "react-chartjs-2": "^5.2.0",
+    "autoprefixer": "^10.4.15",
+    "canvas-confetti": "^1.6.0",
+    "chart.js": "^4.5.0",
+    "file-saver": "^2.0.5",
     "framer-motion": "^10.16.0",
     "lucide-react": "^0.263.1",
-    "tailwindcss": "^3.3.3",
-    "autoprefixer": "^10.4.15",
     "postcss": "^8.4.28",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
-    "file-saver": "^2.0.5",
-    "canvas-confetti": "^1.6.0"
+    "react-router-dom": "^6.15.0",
+    "socket.io-client": "^4.8.1",
+    "tailwindcss": "^3.3.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

@@ -15,4 +15,4 @@ WAV select "audio/ok-1.wav" XGM2
 WAV score "audio/blip-1.wav" XGM2
 WAV pause "audio/coin-5.wav" XGM2
 
-BIN ai_lut "ai_lut.bin"
+BIN ai_lut_bin "ai_lut.bin" ALIGN 4

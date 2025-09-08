@@ -4,7 +4,7 @@ import os
 
 # Updated script to extract weights from the optimized 2-layer neural network
 # Architecture: 5 inputs -> 8 hidden neurons -> 3 outputs
-# Scale factor: 1024 for efficient bit shifting on Genesis (>>10)
+# Scale factor: 256 for efficient bit shifting on Genesis (>>8) and fits in s16
 
 # Check if model exists
 model_path = '../models/pong_ai_model.h5'
@@ -78,19 +78,19 @@ print("// Architecture: 5 inputs -> 8 hidden -> 3 outputs")
 print("// Scale factor: 1024 (use >>10 for division)")
 print("")
 print("// First layer weights: 5x8 matrix")
-print("const s16 weights1[INPUT_SIZE][HIDDEN_SIZE] = {")
+print("const s32 weights1[INPUT_SIZE][HIDDEN_SIZE] = {")
 for i in range(layer1_weights.shape[0]):
     weights_row = [int(w * scale_factor) for w in layer1_weights[i]]
     input_names = ["ball_x", "ball_y", "ball_vx", "ball_vy", "ai_y"]
-    print(f"    {{{', '.join(f'{w:5d}' for w in weights_row)}}},  // {input_names[i]} weights")
+    print(f"    {{{', '.join(f'{w:6d}' for w in weights_row)}}},  // {input_names[i]} weights")
 print("};")
 
 print("\n// First layer bias: 8 values")
 bias1_scaled = [int(b * scale_factor) for b in layer1_bias]
-print(f"const s16 bias1[HIDDEN_SIZE] = {{{', '.join(f'{b:4d}' for b in bias1_scaled)}}};")
+print(f"const s32 bias1[HIDDEN_SIZE] = {{{', '.join(f'{b:4d}' for b in bias1_scaled)}}};")
 
 print("\n// Second layer weights: 8x3 matrix")
-print("const s16 weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {")
+print("const s32 weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {")
 for i in range(layer2_weights.shape[0]):
     weights_row = [int(w * scale_factor) for w in layer2_weights[i]]
     print(f"    {{{', '.join(f'{w:5d}' for w in weights_row)}}},  // hidden neuron {i}")
@@ -98,14 +98,4 @@ print("};")
 
 print("\n// Second layer bias: 3 values")
 bias2_scaled = [int(b * scale_factor) for b in layer2_bias]
-print(f"const s16 bias2[OUTPUT_SIZE] = {{{', '.join(f'{b:4d}' for b in bias2_scaled)}}};")
-
-print("\n" + "="*80)
-print("📋 INTEGRATION INSTRUCTIONS")
-print("="*80)
-print("1. Copy the weights above into pong/src/ai.c")
-print("2. Replace the existing weights1, bias1, weights2, bias2 arrays")
-print("3. Make sure USE_DEBUG_WEIGHTS is set to 0 in ai.c")
-print("4. The C code already uses >>10 bit shifting for the 1024 scale factor")
-print("5. Rebuild the game: make clean && make")
-print("="*80)
+print(f"const s32 bias2[OUTPUT_SIZE] = {{{', '.join(f'{b:4d}' for b in bias2_scaled)}}};")

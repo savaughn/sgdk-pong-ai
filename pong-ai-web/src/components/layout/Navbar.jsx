@@ -21,6 +21,7 @@ const Navbar = () => {
     { path: '/game', label: 'Play Game', icon: Gamepad2 },
     { path: '/training', label: 'Train AI', icon: Brain },
     { path: '/visualizer', label: 'Visualizer', icon: Eye },
+    { path: '/monitor', label: 'Monitor', icon: TrendingUp },
     { path: '/about', label: 'About', icon: Info }
   ]
 

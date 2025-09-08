@@ -39,37 +39,55 @@ export const usePongGame = () => {
         // Load the WebAssembly module via script tag
         console.log('Loading WASM module...');
         
+        let module;
+        
         // Check if PongModule is already loaded globally
         if (typeof window.PongModule === 'function') {
           console.log('PongModule already available');
-          const module = await window.PongModule();
-          moduleRef.current = module;
-          return;
-        }
-        
-        // Load the script dynamically
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = '/pong.js';
-          script.onload = () => {
-            console.log('Script loaded successfully');
-            resolve();
-          };
-          script.onerror = (error) => {
-            console.error('Failed to load script:', error);
-            reject(error);
-          };
-          document.head.appendChild(script);
-        });
-        
-        // Now check if PongModule is available
-        if (typeof window.PongModule === 'function') {
-          console.log('PongModule loaded via script');
-          const module = await window.PongModule();
-          console.log('Module instantiated:', module);
+          module = await window.PongModule({
+            locateFile: (path) => {
+              console.log('Locating file:', path);
+              if (path.endsWith('.wasm')) {
+                return '/pong.wasm';
+              }
+              return path;
+            }
+          });
+          console.log('Module instantiated from cached:', module);
           moduleRef.current = module;
         } else {
-          throw new Error('PongModule not available after script load');
+          // Load the script dynamically
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = '/pong.js';
+            script.onload = () => {
+              console.log('Script loaded successfully');
+              resolve();
+            };
+            script.onerror = (error) => {
+              console.error('Failed to load script:', error);
+              reject(error);
+            };
+            document.head.appendChild(script);
+          });
+          
+          // Now check if PongModule is available
+          if (typeof window.PongModule === 'function') {
+            console.log('PongModule loaded via script');
+            module = await window.PongModule({
+              locateFile: (path) => {
+                console.log('Locating file:', path);
+                if (path.endsWith('.wasm')) {
+                  return '/pong.wasm';
+                }
+                return path;
+              }
+            });
+            console.log('Module instantiated:', module);
+            moduleRef.current = module;
+          } else {
+            throw new Error('PongModule not available after script load');
+          }
         }
 
         // Wrap WASM functions for easier use

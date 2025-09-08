@@ -1,15 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePongGame, AIMode } from '../hooks/usePongGame';
+import { useModel } from '../contexts/ModelContext';
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 448;
 const SCALE = 2; // 2x scale for better visibility
 
 const GamePage = () => {
+  const { hasTrainedModel, extractModelWeights } = useModel();
   const canvasRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAiMode, setCurrentAiMode] = useState(AIMode.PREDICTIVE);
+  const [modelLoaded, setModelLoaded] = useState(false);
   
   const {
     gameState,
@@ -19,7 +22,8 @@ const GamePage = () => {
     startGameLoop,
     stopGameLoop,
     setAIMode,
-    resetGame
+    resetGame,
+    updateNeuralNetwork
   } = usePongGame();
 
   // Canvas rendering
@@ -48,7 +52,7 @@ const GamePage = () => {
     ctx.fillStyle = '#00ff00';
     // Player 1 paddle
     ctx.fillRect(
-      gameState.player1Y * SCALE,
+      16 * SCALE,  // Fixed X position for player 1
       gameState.player1Y * SCALE,
       8 * SCALE,
       48 * SCALE
@@ -115,6 +119,20 @@ const GamePage = () => {
   const handleAIModeChange = (newMode) => {
     setCurrentAiMode(newMode);
     setAIMode(newMode);
+    
+    // If switching to neural mode and we have a trained model, load it
+    if (newMode === AIMode.NEURAL && hasTrainedModel()) {
+      const weights = extractModelWeights();
+      if (weights) {
+        updateNeuralNetwork(weights);
+        setModelLoaded(true);
+        console.log('Loaded trained model into game engine');
+      }
+    } else if (newMode === AIMode.NEURAL && !hasTrainedModel()) {
+      console.warn('No trained model available. Please train a model first.');
+    } else {
+      setModelLoaded(false);
+    }
   };
 
   if (isLoading) {
@@ -229,6 +247,45 @@ const GamePage = () => {
                 </button>
               ))}
             </div>
+            
+            {/* Model Status */}
+            {currentAiMode === AIMode.NEURAL && (
+              <div className="mt-4 p-3 rounded border">
+                {hasTrainedModel() ? (
+                  modelLoaded ? (
+                    <div className="flex items-center space-x-2 text-green-400">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="font-medium">Trained Model Active</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2 text-yellow-400">
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                        <span className="font-medium">Model Available</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const weights = extractModelWeights();
+                          if (weights) {
+                            updateNeuralNetwork(weights);
+                            setModelLoaded(true);
+                          }
+                        }}
+                        className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
+                      >
+                        Load Trained Model
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex items-center space-x-2 text-red-400">
+                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                    <span className="font-medium">No Trained Model</span>
+                    <span className="text-sm">- Train one first!</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Game Stats */}

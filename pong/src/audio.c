@@ -26,6 +26,7 @@ void AUDIO_play(AudioClip clip) {
             break;
         case WAV_SELECT:
             XGM2_playPCMEx(select, sizeof(select), SOUND_PCM_CH3, 10, FALSE, FALSE);
+            break;
         case WAV_SCORE:
             XGM2_playPCMEx(score, sizeof(score), SOUND_PCM_CH3, 12, FALSE, FALSE);
             break;

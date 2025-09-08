@@ -2,10 +2,6 @@
 #include "ai.h"
 #include "resources.h"
 
-#if !USE_BINARY_LUT
-#include "ai_lut_generated.h"
-#endif
-
 #define INPUT_SIZE 5
 #define HIDDEN_SIZE 8
 #define OUTPUT_SIZE 3
@@ -36,36 +32,62 @@ const s16 debug_weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
 
 const s16 debug_bias2[OUTPUT_SIZE] = {-400, 200, -300};
 
-// Real trained weights from TensorFlow model
 // First layer weights: 5x8 matrix
-const s16 weights1[INPUT_SIZE][HIDDEN_SIZE] = {
-    {-1822, -811, 1724, 1640, -422, -415, 76, 1398},      // ball_x weights
-    {-2106, 1719, -1864, -1155, 1860, -1776, 4256, 5352}, // ball_y weights
-    {3098, 410, -688, 996, -1955, 4908, -1385, 1130},     // ball_vx weights
-    {-1488, 790, -545, -190, 1440, -498, 759, 2052},      // ball_vy weights
-    {342, 1048, 4850, 3532, 134, 2237, -298, -2745},      // ai_y weights
+const s32 weights1[INPUT_SIZE][HIDDEN_SIZE] = {
+    {260, -738, 244, -260, -712, 62, 160, -861},      // ball_x weights
+    {1987, -86, -392, 759, -230, -1882, -2603, -415}, // ball_y weights
+    {-773, 1266, -76, -855, 1146, -638, -329, 1417},  // ball_vx weights
+    {645, 389, -425, 216, 356, -231, -282, 480},      // ball_vy weights
+    {-1599, 352, -564, -774, 496, 1606, 2691, 1009},  // ai_y weights
 };
 
 // First layer bias: 8 values
-const s16 bias1[HIDDEN_SIZE] = {1290, 1480, -53, -804, 952, 1604, 321, 851};
+const s32 bias1[HIDDEN_SIZE] = {-150, 1102, -8, 128, 1074, 303, 520, 1084};
 
 // Second layer weights: 8x3 matrix
-const s16 weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
-    {3703, 2942, 4013},    // hidden neuron 0
-    {-543, 2240, 995},     // hidden neuron 1
-    {-4234, -4597, -4437}, // hidden neuron 2
-    {-3348, -4562, -2511}, // hidden neuron 3
-    {3661, 1650, 2479},    // hidden neuron 4
-    {3433, 3378, 2508},    // hidden neuron 5
-    {2705, 2116, 2444},    // hidden neuron 6
-    {-3185, -3414, -2910}, // hidden neuron 7
+const s32 weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
+    {-2960, -3011, -2847}, // hidden neuron 0
+    {1289, 509, 1139},     // hidden neuron 1
+    {384, -485, -264},     // hidden neuron 2
+    {1332, 1446, 1235},    // hidden neuron 3
+    {509, 1524, 960},      // hidden neuron 4
+    {2996, 2627, 3258},    // hidden neuron 5
+    {-3906, -3781, -4017}, // hidden neuron 6
+    {978, 849, 777},       // hidden neuron 7
 };
 
 // Second layer bias: 3 values
-const s16 bias2[OUTPUT_SIZE] = {627, 1694, 150};
+const s32 bias2[OUTPUT_SIZE] = {773, 790, 707};
+
+// Real trained weights from TensorFlow model - using s32 for higher precision
+const s32 expert_weights1[INPUT_SIZE][HIDDEN_SIZE] = {
+    {440, -789, 267, -550, -739, 83, 139, -890},      // ball_x weights
+    {1777, -28, -375, 136, -173, -1717, -2536, -333}, // ball_y weights
+    {-764, 1212, -48, -85, 1121, -468, -147, 1386},   // ball_vx weights
+    {598, 414, -450, 448, 344, -223, -170, 481},      // ball_vy weights
+    {-1548, 351, -514, -630, 504, 1351, 2566, 1033},  // ai_y weights
+};
+
+// First layer bias: 8 values
+const s32 expert_bias1[HIDDEN_SIZE] = {-189, 1043, 9, 60, 1013, 246, 355, 1017};
+
+// Second layer weights: 8x3 matrix
+const s32 expert_weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
+    {-2711, -2753, -2598}, // hidden neuron 0
+    {1262, 476, 1116},     // hidden neuron 1
+    {346, -551, -216},     // hidden neuron 2
+    {405, 763, 671},       // hidden neuron 3
+    {479, 1489, 936},      // hidden neuron 4
+    {2368, 2056, 2692},    // hidden neuron 5
+    {-3633, -3490, -3764}, // hidden neuron 6
+    {955, 821, 746},       // hidden neuron 7
+};
+
+// Second layer bias: 3 values
+const s32 expert_bias2[OUTPUT_SIZE] = {721, 739, 690};
 
 // ReLU activation function
-static inline s16 relu(s16 x)
+static inline s32 relu(s32 x)
 {
     return (x > 0) ? x : 0;
 }
@@ -73,72 +95,55 @@ static inline s16 relu(s16 x)
 // Neural network forward pass
 s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
 {
-    s16 inputs[INPUT_SIZE];
+    // Convert to tile coordinates and normalize to [0, 1024]
+    s32 tile_ball_x = F32_toInt(ball_x) >> 3; // ball_x >> 3
+    s32 tile_ball_y = F32_toInt(ball_y) >> 3; // ball_y >> 3
+    s32 tile_ai_y = F32_toInt(ai_y) >> 3;     // ai_y >> 3
+    s32 norm_ball_x = (tile_ball_x * 1024) / 39;
+    s32 norm_ball_y = (tile_ball_y * 1024) / 27;
+    s32 norm_ball_vx = ((F32_toInt(ball_vx) + 4) * 1024) >> 3;
+    s32 norm_ball_vy = ((F32_toInt(ball_vy) + 4) * 1024) >> 3;
+    s32 norm_ai_y = (tile_ai_y * 1024) / 27;
 
-    s16 bx = F32_toInt(ball_x);
-    inputs[0] = (bx << 1) * 13 >> 6;
+    s32 inputs[INPUT_SIZE] = {
+        norm_ball_x,
+        norm_ball_y,
+        norm_ball_vx,
+        norm_ball_vy,
+        norm_ai_y};
 
-    s16 by = F32_toInt(ball_y);
-    inputs[1] = by * 37 >> 6;
-
-    inputs[2] = F32_toInt(ball_vx) << 4;
-    inputs[3] = F32_toInt(ball_vy) << 4;
-
-    s16 ay = F32_toInt(ai_y);
-    inputs[4] = ay * 37 >> 6;
-
-    s16 hidden[HIDDEN_SIZE];
+    s32 hidden[HIDDEN_SIZE];
     for (u8 h = 0; h < HIDDEN_SIZE; h++)
     {
-#if USE_DEBUG_WEIGHTS
-        s32 sum = debug_bias1[h];
-        for (u8 i = 0; i < INPUT_SIZE; i++)
-        {
-            sum += (s32)inputs[i] * debug_weights1[i][h] >> 6;
-        }
-#else
         s32 sum = bias1[h];
         for (u8 i = 0; i < INPUT_SIZE; i++)
         {
-            // Use 1024 scale factor for easy bit shifting: >>10 is divide by 1024
-            sum += ((s32)inputs[i] * weights1[i][h]) >> 10;
+            sum += (inputs[i] * weights1[i][h]) >> 10; // scale back down
         }
-#endif
-        hidden[h] = relu((s16)sum);
+        hidden[h] = relu(sum);
     }
-
-    s16 outputs[OUTPUT_SIZE];
+    s32 outputs[OUTPUT_SIZE];
     for (u8 o = 0; o < OUTPUT_SIZE; o++)
     {
-#if USE_DEBUG_WEIGHTS
-        s32 sum = debug_bias2[o];
-        for (u8 h = 0; h < HIDDEN_SIZE; h++)
-        {
-            sum += (s32)hidden[h] * debug_weights2[h][o] >> 6; // /64 using bit shift
-        }
-#else
         s32 sum = bias2[o];
         for (u8 h = 0; h < HIDDEN_SIZE; h++)
         {
-            // Use 1024 scale factor for easy bit shifting: >>10 is divide by 1024
-            sum += ((s32)hidden[h] * weights2[h][o]) >> 10;
+            sum += (hidden[h] * weights2[h][o]) >> 10;
         }
-#endif
-        outputs[o] = (s16)sum;
+        outputs[o] = sum;
     }
-
+    // Return action with highest output
     s16 best_action = 0;
-    s16 best_value = outputs[0];
-    for (u8 i = 1; i < OUTPUT_SIZE; i++)
+    s32 best_value = outputs[0];
+    for (u8 o = 1; o < OUTPUT_SIZE; o++)
     {
-        if (outputs[i] > best_value)
+        if (outputs[o] > best_value)
         {
-            best_value = outputs[i];
-            best_action = i;
+            best_action = o;
+            best_value = outputs[o];
         }
     }
-
-    return best_action; // 0=up, 1=stay, 2=down
+    return best_action;
 }
 
 s16 pong_ai_predict(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
@@ -172,10 +177,10 @@ s16 pong_ai_predict(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fi
 
     // Dead zone to avoid jittery movement
     if (diff < -8)
-        return 0; // Move up
+        return AI_ACTION_MOVE_UP; // Move up
     if (diff > 8)
-        return 2; // Move down
-    return 1;     // Stay
+        return AI_ACTION_MOVE_DOWN; // Move down
+    return AI_ACTION_STAY;          // Stay
 }
 
 // Precomputed lookup table approach for Genesis optimization
@@ -209,15 +214,7 @@ s16 pong_ai_lookup(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix
         ay_idx = LUT_AI_Y_STEPS - 1;
 
     // Calculate lookup table index (5D to 1D mapping)
-    // Must match the order in generate_ai_lut.py: bx, by, vx, vy, ay
     u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
 
-#if USE_BINARY_LUT
-    // Use binary resource (faster build, smaller memory footprint)
-    const u8* lut_data = (const u8*)ai_lut;
-    return lut_data[index];
-#else
-    // Use header array (legacy)
-    return ai_lookup_table[index];
-#endif
+    return (s16)((u8*)ai_lut_bin)[index];
 }

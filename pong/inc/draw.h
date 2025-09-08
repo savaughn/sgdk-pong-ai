@@ -26,13 +26,6 @@ typedef enum
     AI_MODE_PREDICTIVE
 } AIMode;
 
-typedef enum
-{
-    AI_ACTION_MOVE_UP,
-    AI_ACTION_STAY,
-    AI_ACTION_MOVE_DOWN
-} AIAction;
-
 typedef enum {
     START,
     COUNTDOWN,

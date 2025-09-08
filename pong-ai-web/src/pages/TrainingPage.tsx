@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import * as tf from '@tensorflow/tfjs';
+import TrainingMonitor from '../components/TrainingMonitor';
 
 interface TrainingData {
   inputs: number[][];
@@ -447,6 +448,8 @@ const TrainingPage: React.FC = () => {
             </p>
           </div>
         </div>
+
+        <TrainingMonitor />
       </motion.div>
     </div>
   );

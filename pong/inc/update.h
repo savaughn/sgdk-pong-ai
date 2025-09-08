@@ -11,7 +11,7 @@
 #define PADDLE_HEIGHT 48
 #define BALL_SIZE 8
 #define PADDLE_SPEED 3
-#define BALL_SPEED 2
+#define BALL_SPEED 3
 #define DEAD_ZONE 8
 
 // Update function declarations
