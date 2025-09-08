@@ -1,93 +1,10 @@
 #include <genesis.h>
 #include "ai.h"
 #include "resources.h"
-
-#define INPUT_SIZE 5
-#define HIDDEN_SIZE 8
-#define OUTPUT_SIZE 3
-
-// Set to 1 to use debug weights, 0 to use real trained weights
-#define USE_DEBUG_WEIGHTS 0
-
-// DEBUG WEIGHTS
-const s16 debug_weights1[INPUT_SIZE][HIDDEN_SIZE] = {
-    {3200, -1800, 2400, -800, 1600, 2000, -1200, 800},    // ball_x weights
-    {-2400, 3600, -1600, 2800, -2000, 1400, 3200, -2600}, // ball_y weights
-    {4800, -3200, 2600, -1800, 3400, -2400, 1800, 2200},  // ball_vx weights
-    {-1600, 2400, -3000, 1800, -2200, 2800, -1400, 3600}, // ball_vy weights
-    {2800, -2000, 1600, -2600, 2400, -1800, 2000, -1400}  // ai_y weights
-};
-
-const s16 debug_bias1[HIDDEN_SIZE] = {800, -600, 1200, -400, 600, -800, 1000, -200};
-
-const s16 debug_weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
-    {1800, -2400, 1600},
-    {-1200, 2800, -2000},
-    {2400, -1600, 2200},
-    {-1800, 1400, -2600},
-    {1600, -2200, 1800},
-    {-2000, 2600, -1400},
-    {2200, -1800, 2000},
-    {-1400, 2400, -1600}};
-
-const s16 debug_bias2[OUTPUT_SIZE] = {-400, 200, -300};
-
-// First layer weights: 5x8 matrix
-const s32 weights1[INPUT_SIZE][HIDDEN_SIZE] = {
-    {260, -738, 244, -260, -712, 62, 160, -861},      // ball_x weights
-    {1987, -86, -392, 759, -230, -1882, -2603, -415}, // ball_y weights
-    {-773, 1266, -76, -855, 1146, -638, -329, 1417},  // ball_vx weights
-    {645, 389, -425, 216, 356, -231, -282, 480},      // ball_vy weights
-    {-1599, 352, -564, -774, 496, 1606, 2691, 1009},  // ai_y weights
-};
-
-// First layer bias: 8 values
-const s32 bias1[HIDDEN_SIZE] = {-150, 1102, -8, 128, 1074, 303, 520, 1084};
-
-// Second layer weights: 8x3 matrix
-const s32 weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
-    {-2960, -3011, -2847}, // hidden neuron 0
-    {1289, 509, 1139},     // hidden neuron 1
-    {384, -485, -264},     // hidden neuron 2
-    {1332, 1446, 1235},    // hidden neuron 3
-    {509, 1524, 960},      // hidden neuron 4
-    {2996, 2627, 3258},    // hidden neuron 5
-    {-3906, -3781, -4017}, // hidden neuron 6
-    {978, 849, 777},       // hidden neuron 7
-};
-
-// Second layer bias: 3 values
-const s32 bias2[OUTPUT_SIZE] = {773, 790, 707};
-
-// Real trained weights from TensorFlow model - using s32 for higher precision
-const s32 expert_weights1[INPUT_SIZE][HIDDEN_SIZE] = {
-    {440, -789, 267, -550, -739, 83, 139, -890},      // ball_x weights
-    {1777, -28, -375, 136, -173, -1717, -2536, -333}, // ball_y weights
-    {-764, 1212, -48, -85, 1121, -468, -147, 1386},   // ball_vx weights
-    {598, 414, -450, 448, 344, -223, -170, 481},      // ball_vy weights
-    {-1548, 351, -514, -630, 504, 1351, 2566, 1033},  // ai_y weights
-};
-
-// First layer bias: 8 values
-const s32 expert_bias1[HIDDEN_SIZE] = {-189, 1043, 9, 60, 1013, 246, 355, 1017};
-
-// Second layer weights: 8x3 matrix
-const s32 expert_weights2[HIDDEN_SIZE][OUTPUT_SIZE] = {
-    {-2711, -2753, -2598}, // hidden neuron 0
-    {1262, 476, 1116},     // hidden neuron 1
-    {346, -551, -216},     // hidden neuron 2
-    {405, 763, 671},       // hidden neuron 3
-    {479, 1489, 936},      // hidden neuron 4
-    {2368, 2056, 2692},    // hidden neuron 5
-    {-3633, -3490, -3764}, // hidden neuron 6
-    {955, 821, 746},       // hidden neuron 7
-};
-
-// Second layer bias: 3 values
-const s32 expert_bias2[OUTPUT_SIZE] = {721, 739, 690};
+#include "weights.h"
 
 // ReLU activation function
-static inline s32 relu(s32 x)
+static inline s16 relu(s16 x)
 {
     return (x > 0) ? x : 0;
 }
@@ -96,26 +13,26 @@ static inline s32 relu(s32 x)
 s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
 {
     // Convert to tile coordinates and normalize to [0, 1024]
-    s32 tile_ball_x = F32_toInt(ball_x) >> 3; // ball_x >> 3
-    s32 tile_ball_y = F32_toInt(ball_y) >> 3; // ball_y >> 3
-    s32 tile_ai_y = F32_toInt(ai_y) >> 3;     // ai_y >> 3
-    s32 norm_ball_x = (tile_ball_x * 1024) / 39;
-    s32 norm_ball_y = (tile_ball_y * 1024) / 27;
-    s32 norm_ball_vx = ((F32_toInt(ball_vx) + 4) * 1024) >> 3;
-    s32 norm_ball_vy = ((F32_toInt(ball_vy) + 4) * 1024) >> 3;
-    s32 norm_ai_y = (tile_ai_y * 1024) / 27;
+    u16 tile_ball_x = F32_toInt(ball_x) >> 3; // ball_x >> 3
+    u16 tile_ball_y = F32_toInt(ball_y) >> 3; // ball_y >> 3
+    u16 tile_ai_y = F32_toInt(ai_y) >> 3;     // ai_y >> 3
+    u16 norm_ball_x = (tile_ball_x * 1024) / 39;
+    u16 norm_ball_y = (tile_ball_y * 1024) / 27;
+    u16 norm_ball_vx = ((F32_toInt(ball_vx) + 4) * 1024) >> 3;
+    u16 norm_ball_vy = ((F32_toInt(ball_vy) + 4) * 1024) >> 3;
+    u16 norm_ai_y = (tile_ai_y * 1024) / 27;
 
-    s32 inputs[INPUT_SIZE] = {
+    const u16 inputs[INPUT_SIZE] = {
         norm_ball_x,
         norm_ball_y,
         norm_ball_vx,
         norm_ball_vy,
         norm_ai_y};
 
-    s32 hidden[HIDDEN_SIZE];
+    s16 hidden[HIDDEN_SIZE];
     for (u8 h = 0; h < HIDDEN_SIZE; h++)
     {
-        s32 sum = bias1[h];
+        s16 sum = bias1[h];
         for (u8 i = 0; i < INPUT_SIZE; i++)
         {
             sum += (inputs[i] * weights1[i][h]) >> 10; // scale back down
@@ -134,7 +51,7 @@ s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 a
     }
     // Return action with highest output
     s16 best_action = 0;
-    s32 best_value = outputs[0];
+    s16 best_value = outputs[0];
     for (u8 o = 1; o < OUTPUT_SIZE; o++)
     {
         if (outputs[o] > best_value)
@@ -214,7 +131,15 @@ s16 pong_ai_lookup(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix
         ay_idx = LUT_AI_Y_STEPS - 1;
 
     // Calculate lookup table index (5D to 1D mapping)
-    u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
-
+    s32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
     return (s16)((u8*)ai_lut_bin)[index];
+
+    // Easy LUT has different action mapping
+    // u16 action = ((u8*)ai_lut_bin)[index];
+    // if (action == 0) // Move up
+    //     return AI_ACTION_MOVE_UP;
+    // else if (action == 1) // Move down
+    //     return AI_ACTION_STAY;
+    // else // Stay
+    //     return AI_ACTION_MOVE_DOWN;
 }

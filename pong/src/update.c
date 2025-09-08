@@ -114,7 +114,7 @@ void updateBall()
     }
 }
 
-void updateAI()
+void updateAI(Paddle *paddle)
 {
     if (aiMode == AI_MODE_NLOOKUP)
     {
@@ -124,17 +124,17 @@ void updateAI()
             FIX32(ball.y),
             FIX32(ball.dx),
             FIX32(ball.dy),
-            FIX32(player2.y)
+            FIX32(paddle->y)
         );
 
         // Execute AI action: 0=up, 1=stay, 2=down
-        if (ai_action == AI_ACTION_MOVE_UP && player2.y > 16)
+        if (ai_action == AI_ACTION_MOVE_UP && paddle->y > 16)
         {
-            player2.y -= PADDLE_SPEED;
+            paddle->y -= PADDLE_SPEED;
         }
-        else if (ai_action == AI_ACTION_MOVE_DOWN && player2.y < SCREEN_HEIGHT - PADDLE_HEIGHT - 16)
+        else if (ai_action == AI_ACTION_MOVE_DOWN && paddle->y < SCREEN_HEIGHT - PADDLE_HEIGHT - 16)
         {
-            player2.y += PADDLE_SPEED;
+            paddle->y += PADDLE_SPEED;
         }
     }
     else if (aiMode == AI_MODE_NEURAL)
@@ -249,8 +249,10 @@ void updateInput()
     // Calculate paddle velocities for ball trajectory modification
     player1.velY = player1.y - player1PrevY;
 
-    updateAI();
-    
+    // AI vs AI mode
+    // updateAI(&player1);
+    updateAI(&player2);
+
     // Calculate AI paddle velocity after AI movement
     player2.velY = player2.y - player2PrevY;
 }

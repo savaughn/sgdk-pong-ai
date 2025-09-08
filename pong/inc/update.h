@@ -11,13 +11,12 @@
 #define PADDLE_HEIGHT 48
 #define BALL_SIZE 8
 #define PADDLE_SPEED 3
-#define BALL_SPEED 3
+#define BALL_SPEED 2
 #define DEAD_ZONE 8
 
 // Update function declarations
 void updateBall(void);
-void updatePaddle(Paddle *paddle);
-void updateAI(void);
+void updateAI(Paddle *paddle);
 void updateInput(void);
 
 #endif // UPDATE_H
