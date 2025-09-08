@@ -2,6 +2,10 @@
 
 AI-powered Pong game for Sega Genesis using SGDK with neural network opponents.
 
+<img width="752" height="620" alt="Screenshot 2025-09-07 at 11 44 43 PM" src="https://github.com/user-attachments/assets/62ae1ae5-0916-4755-9b12-f1a61332a863" />
+<img width="752" height="620" alt="Screenshot 2025-09-07 at 11 44 52 PM" src="https://github.com/user-attachments/assets/543d01e5-9571-4de9-a0f4-ddc27001ebbe" />
+
+
 ## Features
 - **3 AI Modes**: Neural Network, Simple, and Predictive AI
 - **SGP Input System**: Clean controller handling with edge detection
