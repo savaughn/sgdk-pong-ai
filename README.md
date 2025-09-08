@@ -44,21 +44,9 @@ make run      # Run in BlastEm emulator
 ### 1. Train Neural Network
 ```bash
 cd scripts/
-python pong_ai_train.py    # Train DQN model (10,000 episodes, ~5-10 min)
+python pong_ai_train.py
 ```
-This creates `models/pong_ai_model.h5` with the trained neural network weights.
-
-### 2. Extract Weights to C Code
-```bash
-python get_weights.py      # Extract weights from .h5 model
-```
-This outputs C arrays that you copy into `pong/src/ai.c` to replace the debug weights.
-
-### 3. Generate Lookup Table
-```bash
-python generate_ai_lut.py  # Create optimized lookup table
-```
-This generates `pong/src/ai_lut_generated.c` with pre-computed AI decisions for fast Genesis performance.
+This creates `models/pong_ai_model.h5` with the trained neural network weights, then creates the Lookup Table (LUT)
 
 ### 4. Build and Deploy
 ```bash
