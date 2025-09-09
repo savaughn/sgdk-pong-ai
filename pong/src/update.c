@@ -120,11 +120,11 @@ void updateAI(Paddle *paddle)
     {
         // s16 ai_action = pong_ai_NN(
         s16 ai_action = pong_ai_lookup(
-            FIX32(ball.x),
-            FIX32(ball.y),
-            FIX32(ball.dx),
-            FIX32(ball.dy),
-            FIX32(paddle->y)
+            (ball.x),
+            (ball.y),
+            (ball.dx),
+            (ball.dy),
+            (paddle->y)
         );
 
         // Execute AI action: 0=up, 1=stay, 2=down

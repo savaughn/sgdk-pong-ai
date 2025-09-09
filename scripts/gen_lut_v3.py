@@ -6,17 +6,20 @@ import struct
 from random import randint
 
 # ---- Constants: must match ai.c ----
-LUT_BALL_X_STEPS = 40  # 320/8
-LUT_BALL_Y_STEPS = 28  # 224/8
-LUT_VEL_X_STEPS  = 9   # -4..4 -> 0..8
-LUT_VEL_Y_STEPS  = 9   # -4..4 -> 0..8
-LUT_AI_Y_STEPS   = 28  # 224/8
+BALL_X_MIN = 24
+BALL_X_MAX = 296
+BALL_Y_MIN = 8
+BALL_Y_MAX = 208
+AI_Y_MIN = 8
+AI_Y_MAX = 208
 
-LUT_SIZE = (LUT_BALL_X_STEPS *
-            LUT_BALL_Y_STEPS *
-            LUT_VEL_X_STEPS *
-            LUT_VEL_Y_STEPS *
-            LUT_AI_Y_STEPS)
+LUT_BALL_X_STEPS = (BALL_X_MAX - BALL_X_MIN) // 8  # 34
+LUT_BALL_Y_STEPS = (BALL_Y_MAX - BALL_Y_MIN) // 8  # 25
+LUT_VEL_X_STEPS  = 4  # Only -4..-1 and 1..4 (skip 0)
+LUT_VEL_Y_STEPS  = 9  # -4..4
+LUT_AI_Y_STEPS   = (AI_Y_MAX - AI_Y_MIN) // 8  # 25
+
+LUT_SIZE = (LUT_BALL_X_STEPS * LUT_BALL_Y_STEPS * LUT_VEL_X_STEPS * LUT_VEL_Y_STEPS * LUT_AI_Y_STEPS)
 
 # Weights/biases copied from ai.c (the ones actually used by pong_ai_NN)
 weights1 = [
@@ -90,15 +93,24 @@ def generate_lut(path: str):
 
     # Loop order MUST match index mapping in C: bx -> by -> vx -> vy -> ay (ay fastest-changing)
     for bx in range(LUT_BALL_X_STEPS):
-        bx_px = (bx << 3)  # representative raw pixel
+        bx_px = BALL_X_MIN + (bx << 3)
         for by in range(LUT_BALL_Y_STEPS):
-            by_px = (by << 3)
-            for vx in range(LUT_VEL_X_STEPS):
-                ball_vx = vx - 4
+            by_px = BALL_Y_MIN + (by << 3)
+            # Only -4..-1 and 1..4 for ball_vx (skip 0)
+            for vx in range(-4, 0):
+                ball_vx = vx
                 for vy in range(LUT_VEL_Y_STEPS):
                     ball_vy = vy - 4
                     for ay in range(LUT_AI_Y_STEPS):
-                        ay_px = (ay << 3)
+                        ay_px = AI_Y_MIN + (ay << 3)
+                        action = nn_forward(bx_px, by_px, ball_vx, ball_vy, ay_px)
+                        extend(struct.pack("B", action))
+            for vx in range(1, 5):
+                ball_vx = vx
+                for vy in range(LUT_VEL_Y_STEPS):
+                    ball_vy = vy - 4
+                    for ay in range(LUT_AI_Y_STEPS):
+                        ay_px = AI_Y_MIN + (ay << 3)
                         action = nn_forward(bx_px, by_px, ball_vx, ball_vy, ay_px)
                         extend(struct.pack("B", action))
 

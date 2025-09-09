@@ -10,7 +10,7 @@ static inline s16 relu(s16 x)
 }
 
 // Neural network forward pass
-s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
+s16 pong_ai_NN(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 {
     // Convert to tile coordinates and normalize to [0, 1024]
     u16 tile_ball_x = F32_toInt(ball_x) >> 3; // ball_x >> 3
@@ -63,7 +63,7 @@ s16 pong_ai_NN(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 a
     return best_action;
 }
 
-s16 pong_ai_predict(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
+s16 pong_ai_predict(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 {
     // Convert fixed-point to integers for simpler math
     s16 bx = F32_toInt(ball_x);
@@ -102,33 +102,24 @@ s16 pong_ai_predict(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fi
 
 // Precomputed lookup table approach for Genesis optimization
 // This creates a quantized decision table instead of full neural network inference
-#define LUT_BALL_X_STEPS 40 // 320/8 = 40 steps (8px resolution)
-#define LUT_BALL_Y_STEPS 28 // 224/8 = 28 steps (8px resolution)
-#define LUT_VEL_X_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
+#define LUT_BALL_X_STEPS 34 // 320/8 = 40 steps (8px resolution)
+#define LUT_BALL_Y_STEPS 25 // 224/8 = 28 steps (8px resolution)
+#define LUT_VEL_X_STEPS 8   // -4, -3, -2, -1, 0, 1, 2, 3, 4
 #define LUT_VEL_Y_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
-#define LUT_AI_Y_STEPS 28   // 224/8 = 28 steps (8px resolution)
+#define LUT_AI_Y_STEPS 25   // 224/8 = 28 steps (8px resolution)
 
 // Fast lookup function - O(1) instead of O(neural network)
-s16 pong_ai_lookup(fix32 ball_x, fix32 ball_y, fix32 ball_vx, fix32 ball_vy, fix32 ai_y)
+s16 pong_ai_lookup(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 {
-    // Quantize inputs to lookup table indices (8px resolution)
-    u16 bx_idx = F32_toInt(ball_x) >> 3; // Divide by 8 using bit shift
-    u16 by_idx = F32_toInt(ball_y) >> 3; // Divide by 8 using bit shift
-    u16 vx_idx = F32_toInt(ball_vx) + 4; // Map -4..4 to 0..8
-    u16 vy_idx = F32_toInt(ball_vy) + 4; // Map -4..4 to 0..8
-    u16 ay_idx = F32_toInt(ai_y) >> 3;   // Divide by 8 using bit shift
+    if (ball_x < 24 || ball_x > 296)
+        return AI_ACTION_STAY; // Ball out of range, do nothing
 
-    // Clamp to valid ranges
-    if (bx_idx >= LUT_BALL_X_STEPS)
-        bx_idx = LUT_BALL_X_STEPS - 1;
-    if (by_idx >= LUT_BALL_Y_STEPS)
-        by_idx = LUT_BALL_Y_STEPS - 1;
-    if (vx_idx >= LUT_VEL_X_STEPS)
-        vx_idx = LUT_VEL_X_STEPS - 1;
-    if (vy_idx >= LUT_VEL_Y_STEPS)
-        vy_idx = LUT_VEL_Y_STEPS - 1;
-    if (ay_idx >= LUT_AI_Y_STEPS)
-        ay_idx = LUT_AI_Y_STEPS - 1;
+    // Quantize inputs to lookup table indices (8px resolution)
+    u16 bx_idx = ball_x >> 3; // Divide by 8 using bit shift
+    u16 by_idx = ball_y >> 3; // Divide by 8 using bit shift
+    s16 vx_idx = ball_vx + 4; // Map -4..4 to 0..8
+    s16 vy_idx = ball_vy + 4; // Map -4..4 to 0..8
+    u16 ay_idx = ai_y >> 3;   // Divide by 8 using bit shift
 
     // Calculate lookup table index (5D to 1D mapping)
     s32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
