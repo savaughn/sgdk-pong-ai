@@ -118,13 +118,12 @@ void updateAI(Paddle *paddle)
 {
     if (aiMode == AI_MODE_NLOOKUP)
     {
-        // s16 ai_action = pong_ai_NN(
-        s16 ai_action = pong_ai_lookup(
-            FIX32(ball.x),
-            FIX32(ball.y),
-            FIX32(ball.dx),
-            FIX32(ball.dy),
-            FIX32(paddle->y)
+        u16 ai_action = pong_ai_lookup(
+            ball.x,
+            ball.y,
+            ball.dx,
+            ball.dy,
+            paddle->y
         );
 
         // Execute AI action: 0=up, 1=stay, 2=down
@@ -139,12 +138,12 @@ void updateAI(Paddle *paddle)
     }
     else if (aiMode == AI_MODE_NEURAL)
     {
-        s16 ai_action = pong_ai_NN(
-            FIX32(ball.x),
-            FIX32(ball.y),
-            FIX32(ball.dx),
-            FIX32(ball.dy),
-            FIX32(player2.y)
+        u16 ai_action = pong_ai_NN(
+            ball.x,
+            ball.y,
+            ball.dx,
+            ball.dy,
+            player2.y
         );
 
         // Execute AI action: 0=up, 1=stay, 2=down
@@ -159,12 +158,12 @@ void updateAI(Paddle *paddle)
     }
     else if (aiMode == AI_MODE_PREDICTIVE)
     {
-        s16 ai_action = pong_ai_predict(
-            FIX32(ball.x),
-            FIX32(ball.y),
-            FIX32(ball.dx),
-            FIX32(ball.dy),
-            FIX32(player2.y)
+        u16 ai_action = pong_ai_predict(
+            ball.x,
+            ball.y,
+            ball.dx,
+            ball.dy,
+            player2.y
         );
 
         if (ai_action == AI_ACTION_MOVE_UP && player2.y > 16)
