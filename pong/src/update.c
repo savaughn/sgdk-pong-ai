@@ -41,8 +41,8 @@ void updateBall()
         {
             // Increase speed by 50% but cap at maximum
             s16 newSpeed = (ball.dx * 3) / 2;
-            if (newSpeed > 6) newSpeed = 6;
-            if (newSpeed < -6) newSpeed = -6;
+            if (newSpeed > 4) newSpeed = 4;
+            if (newSpeed < -4) newSpeed = -4;
             ball.dx = newSpeed;
             
             // Also slightly randomize Y velocity for more interesting gameplay
@@ -76,8 +76,8 @@ void updateBall()
         {
             // Increase speed by 50% but cap at maximum
             s16 newSpeed = (ball.dx * 3) / 2;
-            if (newSpeed > 6) newSpeed = 6;
-            if (newSpeed < -6) newSpeed = -6;
+            if (newSpeed > 4) newSpeed = 4;
+            if (newSpeed < -4) newSpeed = -4;
             ball.dx = newSpeed;
             
             // Also slightly randomize Y velocity
