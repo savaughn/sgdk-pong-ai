@@ -16,11 +16,11 @@ u16 pong_ai_NN(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
     u16 tile_ball_x = ball_x >> 3; // ball_x >> 3
     u16 tile_ball_y = ball_y >> 3; // ball_y >> 3
     u16 tile_ai_y = ai_y >> 3;     // ai_y >> 3
-    u16 norm_ball_x = (tile_ball_x * 1024) / 39;
-    u16 norm_ball_y = (tile_ball_y * 1024) / 27;
+    u16 norm_ball_x = (tile_ball_x * 1024) / 17;
+    u16 norm_ball_y = (tile_ball_y * 1024) / 25;
     u16 norm_ball_vx = ((ball_vx + 4) * 1024) >> 3;
     u16 norm_ball_vy = ((ball_vy + 4) * 1024) >> 3;
-    u16 norm_ai_y = (tile_ai_y * 1024) / 27;
+    u16 norm_ai_y = (tile_ai_y * 1024) / 25;
 
     const u16 inputs[INPUT_SIZE] = {
         norm_ball_x,
@@ -102,28 +102,54 @@ u16 pong_ai_predict(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 
 // Precomputed lookup table approach for Genesis optimization
 // This creates a quantized decision table instead of full neural network inference
-#define LUT_BALL_X_STEPS 34 // (296 - 24) / 8 = 34 steps (8px resolution)
-#define LUT_BALL_Y_STEPS 25 // (208 - 8) / 8 = 25 steps (8px resolution)
-#define LUT_VEL_X_STEPS 8   // -4, -3, -2, -1, 0, 1, 2, 3, 4
+#define LUT_BALL_X_STEPS 13 // (296 - 160) / 8 = 17 steps (8px resolution)
+#define LIMIT_X 192
+#define LUT_BALL_Y_STEPS 24 // (244 - 16 - 24) / 8 = 23 + 1 steps (8px resolution)
+#define LUT_VEL_X_STEPS 4   // Only positive vx: 1, 2, 3, 4
 #define LUT_VEL_Y_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
-#define LUT_AI_Y_STEPS 25   // 200/8 = 25 steps (8px resolution)
+#define LUT_AI_Y_STEPS 24   // 208/8 = 26 steps (8px resolution)
 
 // Fast lookup function - O(1) instead of O(neural network)
 u16 pong_ai_lookup(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 {
-    if (ball_x < 24 || ball_x > 296)
-        return AI_ACTION_STAY; // Ball out of range, do nothing
+    // Don't use LUT if ball is out of range or moving away
+    // LUT doesn't cover left side or negative vx
+    if (ball_x < LIMIT_X || ball_x > 296 || ball_vx <= 0)
+    {
+        // start moving to center if ball is out of range
+        if (ai_y + 24 < 112)
+            return AI_ACTION_MOVE_DOWN;
+        else if (ai_y + 24 > 112)
+            return AI_ACTION_MOVE_UP;
+        else
+            return AI_ACTION_STAY;
+    }
 
-    // Quantize inputs to lookup table indices (8px resolution)
-    u16 bx_idx = ball_x >> 3; // Divide by 8 using bit shift
-    u16 by_idx = ball_y >> 3; // Divide by 8 using bit shift
-    s16 vx_idx = ball_vx + 4; // Map -4..4 to 0..8
-    s16 vy_idx = ball_vy + 4; // Map -4..4 to 0..8
-    u16 ay_idx = ai_y >> 3;   // Divide by 8 using bit shift
+    // Quantize inputs to lookup table indices (8px resolution, offset by BALL_X_MIN)
+    s16 bx_idx = (ball_x - LIMIT_X) >> 3;
+    s16 by_idx = (ball_y - 16) >> 3;
+    // Only allow positive vx (1..4), LUT stores only rightward motion
+    s16 vx_idx = ball_vx - 1; // 1->0, 2->1, 3->2, 4->3
+    s16 vy_idx = ball_vy + 4;
+    s16 ay_idx = (ai_y - 16) >> 3;
 
-    // Calculate lookup table index (5D to 1D mapping)
-    s32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
-    return (s16)((u8*)ai_lut_bin)[index];
+    // Clamp all indices to valid ranges
+    if (bx_idx < 0) bx_idx = 0;
+    if (bx_idx >= LUT_BALL_X_STEPS) bx_idx = LUT_BALL_X_STEPS - 1;
+    if (by_idx < 0) by_idx = 0;
+    if (by_idx >= LUT_BALL_Y_STEPS) by_idx = LUT_BALL_Y_STEPS - 1;
+    if (vx_idx < 0) vx_idx = 0;
+    if (vx_idx >= LUT_VEL_X_STEPS) vx_idx = LUT_VEL_X_STEPS - 1;
+    if (vy_idx < 0) vy_idx = 0;
+    if (vy_idx >= LUT_VEL_Y_STEPS) vy_idx = LUT_VEL_Y_STEPS - 1;
+    if (ay_idx < 0) ay_idx = 0;
+    if (ay_idx >= LUT_AI_Y_STEPS) ay_idx = LUT_AI_Y_STEPS - 1;
+
+    u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
+    if (index >= sizeof(ai_lut_bin)) {
+        return AI_ACTION_STAY;
+    }
+    return (u16)((u8*)ai_lut_bin)[index];
 }
 
 // NOTES:

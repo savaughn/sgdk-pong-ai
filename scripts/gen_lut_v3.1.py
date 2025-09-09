@@ -1,18 +1,18 @@
 # This script generates a LUT for AI
 import struct
 
-LUT_BALL_X_STEPS = 34  # (296 - 24) / 8
-LUT_BALL_Y_STEPS = 25  # (208 - 8) / 8
+LUT_BALL_X_STEPS = 13  # (296 - 192) / 8 = 13
+LUT_BALL_Y_STEPS = 24  # y > 16 and y < 200 inclusive
 LUT_VEL_X_STEPS  = 8   # -4..-1, 1..4 (skip 0)
 LUT_VEL_Y_STEPS  = 9   # -4..4
-LUT_AI_Y_STEPS   = 25  # (208 - 8) / 8
+LUT_AI_Y_STEPS   = 24  # (208 - 8) / 8
 
-BALL_X_MIN = 24
+BALL_X_MIN = 192
 BALL_X_MAX = 296
-BALL_Y_MIN = 8
-BALL_Y_MAX = 208
-AI_Y_MIN = 8
-AI_Y_MAX = 208
+BALL_Y_MIN = 16
+BALL_Y_MAX = 200
+AI_Y_MIN = 16
+AI_Y_MAX = 200
 
 # Weights/biases copied from ai.c (the ones actually used by pong_ai_NN)
 weights1 = [
@@ -44,11 +44,11 @@ def nn_forward(ball_x_px: int, ball_y_px: int, ball_vx: int, ball_vy: int, ai_y_
     tile_ball_y = ball_y_px >> 3
     tile_ai_y   = ai_y_px   >> 3
 
-    norm_ball_x = (tile_ball_x * 1024) // 39
-    norm_ball_y = (tile_ball_y * 1024) // 27
+    norm_ball_x = (tile_ball_x * 1024) // LUT_BALL_X_STEPS
+    norm_ball_y = (tile_ball_y * 1024) // LUT_BALL_Y_STEPS
     norm_ball_vx = ((ball_vx + 4) * 1024) >> 3
     norm_ball_vy = ((ball_vy + 4) * 1024) >> 3
-    norm_ai_y   = (tile_ai_y * 1024) // 27
+    norm_ai_y   = (tile_ai_y * 1024) // LUT_AI_Y_STEPS
 
     inputs = [norm_ball_x, norm_ball_y, norm_ball_vx, norm_ball_vy, norm_ai_y]
 
@@ -80,7 +80,7 @@ for bx in range(LUT_BALL_X_STEPS):
     bx_px = BALL_X_MIN + (bx << 3)
     for by in range(LUT_BALL_Y_STEPS):
         by_px = BALL_Y_MIN + (by << 3)
-        for vx in list(range(0, 4)) + list(range(5, 9)):
+        for vx in range(5, 9):
             ball_vx = vx - 4
             for vy in range(LUT_VEL_Y_STEPS):
                 ball_vy = vy - 4

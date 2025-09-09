@@ -306,7 +306,7 @@ void drawScore(void)
         }
         else if (aiMode == AI_MODE_NLOOKUP)
         {
-            VDP_drawText("C:NEURAL LUT", 22, 27);
+            VDP_drawText("C:NEURAL LUT 270k", 22, 27);
         }
         else
         {
