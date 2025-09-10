@@ -29,63 +29,75 @@ void updateBall()
 
         // Modify ball trajectory based on paddle velocity (like original Pong)
         // The faster the paddle moves, the more it affects the ball's vertical direction
-        s16 velocityEffect = player1.velY / 2;  // Scale down the effect
+        s16 velocityEffect = player1.velY / 2; // Scale down the effect
         ball.dy += velocityEffect;
-        
+
         // Clamp ball vertical velocity to reasonable limits
-        if (ball.dy > 4) ball.dy = 4;
-        if (ball.dy < -4) ball.dy = -4;
+        if (ball.dy > 4)
+            ball.dy = 4;
+        if (ball.dy < -4)
+            ball.dy = -4;
 
         // Speed up ball if A button is held during hit
         if (SGP_ButtonDown(JOY_1, BUTTON_A))
         {
             // Increase speed by 50% but cap at maximum
-            s16 newSpeed = (ball.dx * 3) / 2;
-            if (newSpeed > 4) newSpeed = 4;
-            if (newSpeed < -4) newSpeed = -4;
+            s16 newSpeed = (ball.dx + 1);
+            if (newSpeed > 4)
+                newSpeed = 4;
+            if (newSpeed < -4)
+                newSpeed = -4;
             ball.dx = newSpeed;
-            
+
             // Also slightly randomize Y velocity for more interesting gameplay
-            s16 newSpeedY = (ball.dy * 3) / 2;
-            if (newSpeedY > 4) newSpeedY = 4;
-            if (newSpeedY < -4) newSpeedY = -4;
+            s16 newSpeedY = (ball.dy + (ball.dy > 0 ? 1 : -1));
+            if (newSpeedY > 4)
+                newSpeedY = 4;
+            if (newSpeedY < -4)
+                newSpeedY = -4;
             ball.dy = newSpeedY;
         }
 
         AUDIO_play(WAV_HIT);
     }
 
-    if (ball.x >= player2.x - BALL_SIZE &&
-        ball.x <= player2.x &&
-        ball.y >= player2.y &&
-        ball.y <= player2.y + PADDLE_HEIGHT)
+    if (ball.x < player2.x + PADDLE_WIDTH &&
+        ball.x + BALL_SIZE > player2.x &&
+        ball.y < player2.y + PADDLE_HEIGHT &&
+        ball.y + BALL_SIZE > player2.y)
     {
         ball.dx = -ball.dx;
         ball.x = player2.x - BALL_SIZE;
 
         // Modify ball trajectory based on AI paddle velocity (like original Pong)
-        s16 velocityEffect = player2.velY / 2;  // Scale down the effect
+        s16 velocityEffect = player2.velY / 4; // Scale down the effect
         ball.dy += velocityEffect;
-        
+
         // Clamp ball vertical velocity to reasonable limits
-        if (ball.dy > 4) ball.dy = 4;
-        if (ball.dy < -4) ball.dy = -4;
+        if (ball.dy > 4)
+            ball.dy = 4;
+        if (ball.dy < -4)
+            ball.dy = -4;
 
         // AI has a 30% chance to speed up the ball for more dynamic gameplay
-        if ((random() % 10) < 3)
-        {
-            // Increase speed by 50% but cap at maximum
-            s16 newSpeed = (ball.dx * 3) / 2;
-            if (newSpeed > 4) newSpeed = 4;
-            if (newSpeed < -4) newSpeed = -4;
-            ball.dx = newSpeed;
-            
-            // Also slightly randomize Y velocity
-            s16 newSpeedY = (ball.dy * 3) / 2;
-            if (newSpeedY > 4) newSpeedY = 4;
-            if (newSpeedY < -4) newSpeedY = -4;
-            ball.dy = newSpeedY;
-        }
+        // if ((random() % 10) < 3)
+        // {
+        //     // Increase speed by 50% but cap at maximum
+        //     s16 newSpeed = (ball.dx - 1);
+        //     if (newSpeed > 4)
+        //         newSpeed = 4;
+        //     if (newSpeed < -4)
+        //         newSpeed = -4;
+        //     ball.dx = newSpeed;
+
+        //     // Also slightly randomize Y velocity
+        //     s16 newSpeedY = (ball.dy + (ball.dy > 0 ? 1 : -1));
+        //     if (newSpeedY > 4)
+        //         newSpeedY = 4;
+        //     if (newSpeedY < -4)
+        //         newSpeedY = -4;
+        //     ball.dy = newSpeedY;
+        // }
 
         AUDIO_play(WAV_HIT);
     }
@@ -123,8 +135,7 @@ void updateAI(Paddle *paddle)
             ball.y,
             ball.dx,
             ball.dy,
-            paddle->y
-        );
+            paddle->y);
 
         // Execute AI action: 0=up, 1=stay, 2=down
         if (ai_action == AI_ACTION_MOVE_UP && paddle->y > 16)
@@ -143,8 +154,7 @@ void updateAI(Paddle *paddle)
             ball.y,
             ball.dx,
             ball.dy,
-            player2.y
-        );
+            player2.y);
 
         // Execute AI action: 0=up, 1=stay, 2=down
         if (ai_action == AI_ACTION_MOVE_UP && player2.y > 16)
@@ -163,8 +173,7 @@ void updateAI(Paddle *paddle)
             ball.y,
             ball.dx,
             ball.dy,
-            player2.y
-        );
+            player2.y);
 
         if (ai_action == AI_ACTION_MOVE_UP && player2.y > 16)
         {

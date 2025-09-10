@@ -3,6 +3,15 @@
 #include "resources.h"
 #include "weights.h"
 
+static u8 lut_ram[sizeof(ai_lut_bin)];
+
+void init_ai()
+{
+    #if PUT_LUT_IN_RAM
+        memcpy(lut_ram, ai_lut_bin, sizeof(ai_lut_bin));
+    #endif
+}
+
 // ReLU activation function
 static inline s16 relu(s16 x)
 {
@@ -102,28 +111,51 @@ u16 pong_ai_predict(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 
 // Precomputed lookup table approach for Genesis optimization
 // This creates a quantized decision table instead of full neural network inference
-#define LUT_BALL_X_STEPS 13 // (296 - 160) / 8 = 17 steps (8px resolution)
-#define LIMIT_X 192
-#define LUT_BALL_Y_STEPS 24 // (244 - 16 - 24) / 8 = 23 + 1 steps (8px resolution)
+#define LUT_BALL_X_STEPS 7 // (296 - 160) / 8 = 17 steps (8px resolution)
+#define LIMIT_X 232
+#define LUT_BALL_Y_STEPS 18 // (244 - 16 - 24) / 8 = 19 + 1 steps (8px resolution)
 #define LUT_VEL_X_STEPS 4   // Only positive vx: 1, 2, 3, 4
 #define LUT_VEL_Y_STEPS 9   // -4, -3, -2, -1, 0, 1, 2, 3, 4
 #define LUT_AI_Y_STEPS 24   // 208/8 = 26 steps (8px resolution)
 
 // Fast lookup function - O(1) instead of O(neural network)
+#define GET_ACTION_2BIT(packed, bitpos) (((packed) >> (6 - 2 * (bitpos))) & 0x3)
 u16 pong_ai_lookup(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
 {
+    static u8 recent_actions[4];
+    static int action_idx = 0;
+
     // Don't use LUT if ball is out of range or moving away
     // LUT doesn't cover left side or negative vx
     if (ball_x < LIMIT_X || ball_x > 296 || ball_vx <= 0)
     {
+        // Don't let AI center paddle too aggressively
+        // wait for ball to pass paddle and reset
+        if (ball_x < 296 + 4 && ball_x > 296)
+            return AI_ACTION_STAY;
         // start moving to center if ball is out of range
         if (ai_y + 24 < 112)
             return AI_ACTION_MOVE_DOWN;
         else if (ai_y + 24 > 112)
             return AI_ACTION_MOVE_UP;
-        else
-            return AI_ACTION_STAY;
+        return AI_ACTION_STAY;
     }
+
+    // if (ball_y > 32 || ball_y < 184)
+        // return AI_ACTION_STAY; // Out of vertical bounds
+
+    // Emergency aggregation: if ball is about to cross paddle
+    // (Assume ai_y is paddle->y, ball_x is ball.x, paddle is on right side)
+    // if (ball_x >= 296 - 1) {
+    //     int up_count = 0, down_count = 0;
+    //     for (int i = 0; i < 4; i++) {
+    //         if (recent_actions[i] == AI_ACTION_MOVE_UP) up_count++;
+    //         if (recent_actions[i] == AI_ACTION_MOVE_DOWN) down_count++;
+    //     }
+    //     if (up_count > down_count) return AI_ACTION_MOVE_UP;
+    //     if (down_count > up_count) return AI_ACTION_MOVE_DOWN;
+    //     // else stay
+    // }
 
     // Quantize inputs to lookup table indices (8px resolution, offset by BALL_X_MIN)
     s16 bx_idx = (ball_x - LIMIT_X) >> 3;
@@ -134,22 +166,67 @@ u16 pong_ai_lookup(s16 ball_x, s16 ball_y, s16 ball_vx, s16 ball_vy, s16 ai_y)
     s16 ay_idx = (ai_y - 16) >> 3;
 
     // Clamp all indices to valid ranges
-    if (bx_idx < 0) bx_idx = 0;
-    if (bx_idx >= LUT_BALL_X_STEPS) bx_idx = LUT_BALL_X_STEPS - 1;
-    if (by_idx < 0) by_idx = 0;
-    if (by_idx >= LUT_BALL_Y_STEPS) by_idx = LUT_BALL_Y_STEPS - 1;
-    if (vx_idx < 0) vx_idx = 0;
-    if (vx_idx >= LUT_VEL_X_STEPS) vx_idx = LUT_VEL_X_STEPS - 1;
-    if (vy_idx < 0) vy_idx = 0;
-    if (vy_idx >= LUT_VEL_Y_STEPS) vy_idx = LUT_VEL_Y_STEPS - 1;
-    if (ay_idx < 0) ay_idx = 0;
-    if (ay_idx >= LUT_AI_Y_STEPS) ay_idx = LUT_AI_Y_STEPS - 1;
+    if (bx_idx < 0)
+        bx_idx = 0;
+    if (bx_idx >= LUT_BALL_X_STEPS)
+        bx_idx = LUT_BALL_X_STEPS - 1;
+    if (by_idx < 0)
+        by_idx = 0;
+    if (by_idx >= LUT_BALL_Y_STEPS)
+        by_idx = LUT_BALL_Y_STEPS - 1;
+    if (vx_idx < 0)
+        vx_idx = 0;
+    if (vx_idx >= LUT_VEL_X_STEPS)
+        vx_idx = LUT_VEL_X_STEPS - 1;
+    if (vy_idx < 0)
+        vy_idx = 0;
+    if (vy_idx >= LUT_VEL_Y_STEPS)
+        vy_idx = LUT_VEL_Y_STEPS - 1;
+    if (ay_idx < 0)
+        ay_idx = 0;
+    if (ay_idx >= LUT_AI_Y_STEPS)
+        ay_idx = LUT_AI_Y_STEPS - 1;
 
-    u32 index = ((((bx_idx * LUT_BALL_Y_STEPS + by_idx) * LUT_VEL_X_STEPS + vx_idx) * LUT_VEL_Y_STEPS + vy_idx) * LUT_AI_Y_STEPS + ay_idx);
-    if (index >= sizeof(ai_lut_bin)) {
+    // Calculate compressed LUT index directly
+    u16 compressed_lut_index = (((((bx_idx * LUT_BALL_Y_STEPS + by_idx)
+        * LUT_VEL_X_STEPS + vx_idx)
+        * LUT_VEL_Y_STEPS + vy_idx)
+        * (LUT_AI_Y_STEPS >> 2)) + (ay_idx >> 2));
+
+    if (compressed_lut_index >= sizeof(ai_lut_bin))
+    {
+        return AI_ACTION_STAY;
+        int up_count = 0, down_count = 0;
+        for (int i = 0; i < 4; i++) {
+            if (recent_actions[i] == AI_ACTION_MOVE_UP) up_count++;
+            if (recent_actions[i] == AI_ACTION_MOVE_DOWN) down_count++;
+        }
+        if (up_count > down_count) return AI_ACTION_MOVE_UP;
+        if (down_count > up_count) return AI_ACTION_MOVE_DOWN;
+        // else stay
+    }
+    #if PUT_LUT_IN_RAM
+        u8 packed_byte = ((u8 *)lut_ram)[compressed_lut_index];
+    #else
+        u8 packed_byte = ((u8 *)ai_lut_bin)[compressed_lut_index];
+    #endif
+    u8 bitpos = ay_idx & 3;
+    u8 action = (u8)GET_ACTION_2BIT(packed_byte, bitpos);
+    recent_actions[action_idx] = action;
+    action_idx = (action_idx + 1) % 4;
+
+    // Anti-jitter logic: suppress up-down-up-down pattern
+    int up_down_pattern = 0;
+    if ((recent_actions[0] == AI_ACTION_MOVE_UP && recent_actions[1] == AI_ACTION_MOVE_DOWN &&
+         recent_actions[2] == AI_ACTION_MOVE_UP && recent_actions[3] == AI_ACTION_MOVE_DOWN) ||
+        (recent_actions[0] == AI_ACTION_MOVE_DOWN && recent_actions[1] == AI_ACTION_MOVE_UP &&
+         recent_actions[2] == AI_ACTION_MOVE_DOWN && recent_actions[3] == AI_ACTION_MOVE_UP)) {
+        up_down_pattern = 1;
+    }
+    if (up_down_pattern) {
         return AI_ACTION_STAY;
     }
-    return (u16)((u8*)ai_lut_bin)[index];
+    return action;
 }
 
 // NOTES:

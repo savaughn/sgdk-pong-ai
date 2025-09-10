@@ -44,6 +44,7 @@ extern Sprite *paddle_sprite, *paddle_sprite2;
 extern const u16 palette[16];
 
 // Drawing function declarations
+void init_draw(u16 lut_size);
 void drawPaddle(Paddle *paddle, Sprite *sprite);
 void drawBall(void);
 void drawPauseMenu(void);

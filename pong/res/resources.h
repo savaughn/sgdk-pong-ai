@@ -13,7 +13,7 @@ extern const u8 close[48384];
 extern const u8 select[3072];
 extern const u8 score[4352];
 extern const u8 pause[5632];
-extern const u8 ai_lut_bin[269568];
+extern const u8 ai_lut_bin[27216];
 extern const SpriteDefinition ball_norm;
 extern const SpriteDefinition ball_spl;
 extern const SpriteDefinition paddle;

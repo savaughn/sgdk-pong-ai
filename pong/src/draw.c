@@ -5,6 +5,26 @@
 extern GameState gameState;
 const u16 screenWidthTiles = 40;
 const u16 screenHeightTiles = 28;
+static u16 draw_lut_size = 0;
+static char lut_str[] = "00KB";
+
+void init_draw(u16 lut_size)
+{
+    draw_lut_size = lut_size;
+    intToStr(draw_lut_size, lut_str, 0);
+    if (lut_size < 10000)
+    {
+        lut_str[1] = 'K';
+        lut_str[2] = 'B';
+        lut_str[3] = '\0';
+    }
+    else
+    {
+        lut_str[2] = 'K'; // Append 'K' for kilobytes
+        lut_str[3] = 'B';
+        lut_str[4] = '\0';
+    }
+}
 
 void drawPaddle(Paddle *paddle, Sprite *sprite)
 {
@@ -66,7 +86,7 @@ void drawPlayBorder(void)
         0x00000000,
         0x00000000,
         0x00000000};
-    
+
     u32 topBorderTile[8] = {
         0x00000000,
         0x00000000,
@@ -92,7 +112,6 @@ void drawPlayBorder(void)
     {
         VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, TRUE, FALSE, FALSE, TILE_USER_INDEX + 3), x, screenHeightTiles - 2);
     }
-
 }
 
 void drawBorder(void)
@@ -144,8 +163,8 @@ void animateDoorOpening(void)
     u16 centerX = screenWidthTiles / 2;
 
     // Use the existing 1px border tiles (already loaded)
-    u16 leftBorderTile = TILE_USER_INDEX + 1;  // Right 1px border tile (for left door)
-    u16 rightBorderTile = TILE_USER_INDEX;     // Left 1px border tile (for right door)
+    u16 leftBorderTile = TILE_USER_INDEX + 1; // Right 1px border tile (for left door)
+    u16 rightBorderTile = TILE_USER_INDEX;    // Left 1px border tile (for right door)
 
     // Start with doors closed in the center, then open them to edges
     for (u16 pos = centerX - 1; pos < screenWidthTiles; pos++)
@@ -306,7 +325,8 @@ void drawScore(void)
         }
         else if (aiMode == AI_MODE_NLOOKUP)
         {
-            VDP_drawText("C:NEURAL LUT 270k", 22, 27);
+            VDP_drawText("C:NEURAL LUT", 22, 27);
+            VDP_drawText(lut_str, 35, 27);
         }
         else
         {

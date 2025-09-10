@@ -1,18 +1,11 @@
 # This script generates a LUT for AI
 import struct
 
-LUT_BALL_X_STEPS = 13  # (296 - 192) / 8 = 13
-LUT_BALL_Y_STEPS = 24  # y > 16 and y < 200 inclusive
-LUT_VEL_X_STEPS  = 8   # -4..-1, 1..4 (skip 0)
+# 1 is jittery but works, 7 last known good (smooth)
+LUT_BALL_X_STEPS = 7  # (296 - 288) / 8 = 1
+LUT_BALL_Y_STEPS = 18  # y > 16 and y < 200 inclusive
 LUT_VEL_Y_STEPS  = 9   # -4..4
 LUT_AI_Y_STEPS   = 24  # (208 - 8) / 8
-
-BALL_X_MIN = 192
-BALL_X_MAX = 296
-BALL_Y_MIN = 16
-BALL_Y_MAX = 200
-AI_Y_MIN = 16
-AI_Y_MAX = 200
 
 # Weights/biases copied from ai.c (the ones actually used by pong_ai_NN)
 weights1 = [
@@ -75,19 +68,33 @@ def nn_forward(ball_x_px: int, ball_y_px: int, ball_vx: int, ball_vy: int, ai_y_
     return best_action
 
 # Generate compressed LUT
+
 lut = bytearray()
+actions = []
 for bx in range(LUT_BALL_X_STEPS):
-    bx_px = BALL_X_MIN + (bx << 3)
+    bx_px = (bx << 3)
     for by in range(LUT_BALL_Y_STEPS):
-        by_px = BALL_Y_MIN + (by << 3)
+        by_px = (by << 3)
+        # Vx -4 to 4, skip 0
         for vx in range(5, 9):
             ball_vx = vx - 4
             for vy in range(LUT_VEL_Y_STEPS):
                 ball_vy = vy - 4
                 for ay in range(LUT_AI_Y_STEPS):
-                    ay_px = AI_Y_MIN + (ay << 3)
+                    ay_px = (ay << 3)
                     action = nn_forward(bx_px, by_px, ball_vx, ball_vy, ay_px)
-                    lut.extend(struct.pack("B", action))
+                    actions.append(action & 0xF)
+
+# Pack two actions per byte
+
+# Pack four actions per byte (2 bits per action)
+for i in range(0, len(actions), 4):
+    a0 = actions[i] & 0x3
+    a1 = actions[i+1] & 0x3 if i+1 < len(actions) else 0
+    a2 = actions[i+2] & 0x3 if i+2 < len(actions) else 0
+    a3 = actions[i+3] & 0x3 if i+3 < len(actions) else 0
+    packed = (a0 << 6) | (a1 << 4) | (a2 << 2) | a3
+    lut.append(packed)
 
 with open("../pong/res/ai_lut.bin", "wb") as f:
     f.write(lut)

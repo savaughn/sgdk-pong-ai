@@ -57,9 +57,8 @@ void initGame()
     oldScore2 = 99;  // Force score redraw
     lastAiMode = AI_MODE_PREDICTIVE; // Force AI mode text redraw
 
-    // SPR_setVisibility(paddle_sprite, VISIBLE);
-    // SPR_setVisibility(paddle_sprite2, VISIBLE);
-    // SPR_setVisibility(ball_sprite, VISIBLE);
+    init_draw((u16)sizeof(ai_lut_bin));
+    init_ai();
 }
 
 void main(_Bool reset)
